@@ -1,0 +1,13 @@
+venv/
+__pycache__/
+*.pyc
+
+# model files
+models/*.h5
+*.pth
+
+# datasets
+data/
+
+# notebooks
+.ipynb_checkpoints/
