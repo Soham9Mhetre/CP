@@ -4,19 +4,19 @@
 
 This project implements a **Graph Neural Network (GNN) based fraud detection system** for financial transactions using the **Elliptic Bitcoin Transaction Dataset**.
 
-Traditional machine learning models treat transactions independently, but financial fraud often occurs through **networks of connected transactions**. This project models transactions as a **graph structure**, enabling the detection of suspicious patterns through relationships between transactions.
+Traditional machine learning models treat transactions independently. However, financial fraud often occurs through **networks of connected transactions**. This project models transactions as a **graph structure**, enabling the detection of suspicious patterns using relationships between transactions.
 
-The system combines **spectral graph filtering and graph neural networks** to identify fraudulent transactions more effectively.
+The system combines **spectral graph filtering and graph neural networks** to detect fraudulent transactions.
 
 ---
 
 ## Problem Statement
 
-Financial fraud detection is challenging because:
+Detecting financial fraud is difficult because:
 
-* Fraudulent transactions are **rare (class imbalance)**.
-* Fraud often occurs in **groups or transaction chains**.
-* Attackers may create **camouflage connections** to hide illegal activity.
+* Fraudulent transactions are **rare (class imbalance)**
+* Fraud often occurs in **transaction chains or clusters**
+* Attackers may create **camouflage connections** to hide suspicious activity
 
 This project addresses these challenges using **graph-based learning techniques**.
 
@@ -24,22 +24,22 @@ This project addresses these challenges using **graph-based learning techniques*
 
 ## Dataset
 
-The model is trained on the **Elliptic Bitcoin Transaction Dataset**.
+This project uses the **Elliptic Bitcoin Transaction Dataset**.
 
 ### Dataset Properties
 
-| Property                       | Value                 |
-| ------------------------------ | --------------------- |
-| Number of transactions (nodes) | 203,769               |
-| Number of edges (connections)  | 234,355               |
-| Features per transaction       | 165                   |
-| Classes                        | Normal (0), Fraud (1) |
+| Property                 | Value                 |
+| ------------------------ | --------------------- |
+| Number of transactions   | 203,769               |
+| Number of edges          | 234,355               |
+| Features per transaction | 165                   |
+| Classes                  | Normal (0), Fraud (1) |
 
-Each node represents a **Bitcoin transaction**, and edges represent **transaction flow between nodes**.
+Each node represents a **Bitcoin transaction**, and edges represent **money flow between transactions**.
 
 ### Dataset Structure
 
-```
+```text
 Data(
 x=[203769,165],
 edge_index=[2,234355],
@@ -51,15 +51,86 @@ test_mask=[203769]
 
 Where:
 
-* `x` = Node feature matrix
-* `edge_index` = Graph connectivity matrix
-* `y` = Transaction labels
+* **x** → node feature matrix
+* **edge_index** → graph connections
+* **y** → transaction labels
+
+---
+
+## Dataset Setup
+
+The dataset is **not included in this repository** because it exceeds GitHub’s file size limit.
+
+### Step 1 — Download the Dataset
+
+Download the dataset from:
+
+https://www.kaggle.com/datasets/ellipticco/elliptic-data-set
+
+You need a **Kaggle account** to download the dataset.
+
+---
+
+### Step 2 — Extract the Dataset
+
+After downloading, extract the files.
+
+You should obtain the following files:
+
+```
+elliptic_txs_features.csv
+elliptic_txs_classes.csv
+elliptic_txs_edgelist.csv
+```
+
+---
+
+### Step 3 — Place the Files in the Project
+
+Create the following directory structure:
+
+```
+data/
+ └── raw/
+```
+
+Place the dataset files inside:
+
+```
+data/raw/
+    elliptic_txs_features.csv
+    elliptic_txs_classes.csv
+    elliptic_txs_edgelist.csv
+```
+
+Final project structure should look like:
+
+```
+CP/
+│
+models/
+│   gcn.py
+│   spectral_filter.py
+│
+training/
+│   train.py
+│
+data/
+ └── raw/
+     elliptic_txs_features.csv
+     elliptic_txs_classes.csv
+     elliptic_txs_edgelist.csv
+│
+requirements.txt
+README.md
+.gitignore
+```
 
 ---
 
 ## System Architecture
 
-The current system pipeline is:
+The current pipeline is:
 
 ```
 Transaction Graph
@@ -68,20 +139,14 @@ Spectral Graph Filter
         ↓
 Graph Convolutional Network (GCN)
         ↓
-Weighted Cross Entropy Training
+Weighted Cross Entropy Loss
         ↓
 Fraud Classification
 ```
 
-### 1. Spectral Graph Filter
+---
 
-A spectral filtering layer smooths node features across the graph using Laplacian-based message passing. This reduces graph noise and improves feature consistency across connected transactions.
-
-### 2. Graph Convolutional Network
-
-The model uses Graph Convolution layers to aggregate information from neighboring transactions.
-
-Architecture:
+## Model Architecture
 
 ```
 Input Features (165)
@@ -97,37 +162,19 @@ GCN Layer (64 → 2)
 Fraud Prediction
 ```
 
-### 3. Class Imbalance Handling
+---
 
-Fraud cases are significantly fewer than normal transactions. To address this, the model uses **weighted cross entropy loss**.
+## Handling Class Imbalance
+
+Fraud cases are significantly fewer than normal transactions.
+
+To address this, the model uses **weighted cross entropy loss**:
 
 ```
 weights = [1, 9]
 ```
 
 This penalizes fraud misclassification more heavily.
-
----
-
-## Project Structure
-
-```
-CP/
-│
-models/
-│   gcn.py
-│   spectral_filter.py
-│
-training/
-│   train.py
-│
-data/
-│   (dataset should be placed here locally)
-│
-requirements.txt
-README.md
-.gitignore
-```
 
 ---
 
@@ -146,7 +193,7 @@ Create a virtual environment:
 python -m venv venv
 ```
 
-Activate the environment:
+Activate the environment.
 
 Windows:
 
@@ -162,30 +209,18 @@ pip install -r requirements.txt
 
 ---
 
-## Dataset Setup
-
-The dataset is not included in the repository due to GitHub file size limits.
-
-Download the **Elliptic Bitcoin dataset** and place the files inside:
-
-```
-data/raw/
-```
-
----
-
 ## Running the Project
 
-Run the training script:
+After placing the dataset in `data/raw/`, run:
 
 ```
 python -m training.train
 ```
 
-This will:
+This script will:
 
 1. Load the transaction graph
-2. Train the GNN model
+2. Train the Graph Neural Network
 3. Evaluate fraud detection performance
 
 ---
@@ -207,17 +242,29 @@ Example results:
 | Fraud Recall   | ~0.66 |
 | Fraud F1 Score | ~0.32 |
 
-The model successfully detects approximately **66% of fraudulent transactions**.
+The model detects approximately **66% of fraudulent transactions**.
 
 ---
 
-## Key Features
+## Project Structure
 
-* Graph-based fraud detection
-* Spectral graph filtering
-* Graph Neural Network architecture
-* Handling of class imbalance
-* GPU accelerated training
+```
+CP/
+│
+models/
+│   gcn.py
+│   spectral_filter.py
+│
+training/
+│   train.py
+│
+data/
+│   raw/
+│
+requirements.txt
+README.md
+.gitignore
+```
 
 ---
 
@@ -241,4 +288,4 @@ Computer Science (AI & ML)
 
 ## License
 
-This project is for academic and research purposes.
+This project is intended for **academic and research purposes**.
