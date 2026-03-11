@@ -20,7 +20,7 @@ model = GCN(
 optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
 
 
-for epoch in range(50):
+for epoch in range(100):
 
     model.train()
 
