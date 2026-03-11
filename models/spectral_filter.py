@@ -12,19 +12,19 @@ class SpectralFilter(MessagePassing):
 
     def forward(self, x, edge_index):
 
-        # Add self loops
+        
         edge_index, _ = add_self_loops(edge_index, num_nodes=x.size(0))
 
         row, col = edge_index
 
-        # Compute normalization
+        
         deg = degree(col, x.size(0), dtype=x.dtype)
         deg_inv_sqrt = deg.pow(-0.5)
         deg_inv_sqrt[deg_inv_sqrt == float("inf")] = 0
 
         norm = deg_inv_sqrt[row] * deg_inv_sqrt[col]
 
-        # Message passing
+        
         filtered = self.propagate(edge_index, x=x, norm=norm)
 
         return (1 - self.alpha) * x + self.alpha * filtered
