@@ -1,7 +1,8 @@
 import torch
 import torch.nn.functional as F
 
-from models.gcn import GCN
+
+from models.gat_encoder import FraudGAT
 from data.load_dataset import load_dataset
 
 from sklearn.metrics import classification_report
@@ -11,7 +12,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 data = load_dataset()
 data = data.to(device)
 
-model = GCN(
+model = FraudGAT(
     input_dim=data.num_features,
     hidden_dim=64,
     output_dim=2
@@ -20,11 +21,11 @@ model = GCN(
 optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
 
 
-for epoch in range(100):
+for epoch in range(500):
 
     model.train()
 
-    out = model(data.x, data.edge_index)
+    out = model(data.x, data.edge_index, data.time_steps)
     weights = torch.tensor([1.0, 9.0]).to(device)
 
     loss = F.cross_entropy(
@@ -45,7 +46,7 @@ model.eval()
 
 with torch.no_grad():
 
-    out = model(data.x, data.edge_index)
+    out = model(data.x, data.edge_index, data.time_steps)
 
     pred = out.argmax(dim=1)
 
