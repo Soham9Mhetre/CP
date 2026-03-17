@@ -12,12 +12,6 @@ The project is implemented using PyTorch and PyTorch Geometric and is tested on 
 
 ---
 
-# Project Creator
-
-**Soham Mhetre**  
-B.Tech Computer Science (AI & ML)
-
----
 
 # Project Architecture
 
@@ -207,6 +201,13 @@ GNNExplainer for interpretability
 Reinforcement learning based edge pruning
 
 ---
+# Project Creator
+
+**Soham Mhetre**  
+B.Tech Computer Science (AI & ML)
+
+---
+
 
 # References
 
