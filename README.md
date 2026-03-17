@@ -201,7 +201,7 @@ GNNExplainer for interpretability
 Reinforcement learning based edge pruning
 
 ---
-# Project Creator
+# Author
 
 **Soham Mhetre**  
 B.Tech Computer Science (AI & ML)
