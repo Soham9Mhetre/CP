@@ -1,291 +1,202 @@
-# Graph Neural Network Based Transaction Fraud Detection
+# Spectral-Temporal Graph Network for Fraud Detection
 
-## Overview
+This project implements a Graph Neural Network based fraud detection system for financial transaction graphs. The system is designed to detect camouflage fraud attacks where malicious users hide among legitimate users.
 
-This project implements a **Graph Neural Network (GNN) based fraud detection system** for financial transactions using the **Elliptic Bitcoin Transaction Dataset**.
+The model combines three main techniques:
 
-Traditional machine learning models treat transactions independently. However, financial fraud often occurs through **networks of connected transactions**. This project models transactions as a **graph structure**, enabling the detection of suspicious patterns using relationships between transactions.
+• Spectral Graph Filtering  
+• Graph Attention Networks (GAT)  
+• Temporal Behavior Modeling (LSTM)
 
-The system combines **spectral graph filtering and graph neural networks** to detect fraudulent transactions.
-
----
-
-## Problem Statement
-
-Detecting financial fraud is difficult because:
-
-* Fraudulent transactions are **rare (class imbalance)**
-* Fraud often occurs in **transaction chains or clusters**
-* Attackers may create **camouflage connections** to hide suspicious activity
-
-This project addresses these challenges using **graph-based learning techniques**.
+The project is implemented using PyTorch and PyTorch Geometric and is tested on the Elliptic Bitcoin Transaction Dataset.
 
 ---
 
-## Dataset
+# Project Architecture
 
-This project uses the **Elliptic Bitcoin Transaction Dataset**.
+The system follows a Filter → Encode → Temporal Reasoning → Prediction pipeline.
 
-### Dataset Properties
-
-| Property                 | Value                 |
-| ------------------------ | --------------------- |
-| Number of transactions   | 203,769               |
-| Number of edges          | 234,355               |
-| Features per transaction | 165                   |
-| Classes                  | Normal (0), Fraud (1) |
-
-Each node represents a **Bitcoin transaction**, and edges represent **money flow between transactions**.
-
-### Dataset Structure
-
-```text
-Data(
-x=[203769,165],
-edge_index=[2,234355],
-y=[203769],
-train_mask=[203769],
-test_mask=[203769]
-)
-```
-
-Where:
-
-* **x** → node feature matrix
-* **edge_index** → graph connections
-* **y** → transaction labels
-
----
-
-## Dataset Setup
-
-The dataset is **not included in this repository** because it exceeds GitHub’s file size limit.
-
-### Step 1 — Download the Dataset
-
-Download the dataset from:
-
-https://www.kaggle.com/datasets/ellipticco/elliptic-data-set
-
-You need a **Kaggle account** to download the dataset.
-
----
-
-### Step 2 — Extract the Dataset
-
-After downloading, extract the files.
-
-You should obtain the following files:
-
-```
-elliptic_txs_features.csv
-elliptic_txs_classes.csv
-elliptic_txs_edgelist.csv
-```
-
----
-
-### Step 3 — Place the Files in the Project
-
-Create the following directory structure:
-
-```
-data/
- └── raw/
-```
-
-Place the dataset files inside:
-
-```
-data/raw/
-    elliptic_txs_features.csv
-    elliptic_txs_classes.csv
-    elliptic_txs_edgelist.csv
-```
-
-Final project structure should look like:
-
-```
-CP/
-│
-models/
-│   gcn.py
-│   spectral_filter.py
-│
-training/
-│   train.py
-│
-data/
- └── raw/
-     elliptic_txs_features.csv
-     elliptic_txs_classes.csv
-     elliptic_txs_edgelist.csv
-│
-requirements.txt
-README.md
-.gitignore
-```
-
----
-
-## System Architecture
-
-The current pipeline is:
-
-```
-Transaction Graph
-        ↓
-Spectral Graph Filter
-        ↓
-Graph Convolutional Network (GCN)
-        ↓
-Weighted Cross Entropy Loss
-        ↓
-Fraud Classification
-```
-
----
-
-## Model Architecture
-
-```
-Input Features (165)
-        ↓
-Spectral Filter
-        ↓
-GCN Layer (165 → 64)
-        ↓
-ReLU Activation
-        ↓
-GCN Layer (64 → 2)
-        ↓
+Transaction Graph  
+↓  
+Spectral Graph Filter  
+↓  
+Graph Attention Network (GAT)  
+↓  
+Temporal LSTM Module  
+↓  
+Classifier  
+↓  
 Fraud Prediction
-```
 
 ---
 
-## Handling Class Imbalance
+# Key Components
 
-Fraud cases are significantly fewer than normal transactions.
+## Spectral Graph Filter
 
-To address this, the model uses **weighted cross entropy loss**:
+The spectral filter removes high-frequency adversarial noise in the graph.
 
-```
-weights = [1, 9]
-```
+Adversarial attacks often inject fake edges to hide fraud nodes. Spectral filtering suppresses these noisy graph signals before the model learns from the data.
 
-This penalizes fraud misclassification more heavily.
+File location: models/spectral_filter.py
 
 ---
 
-## Installation
+## Graph Attention Network (GAT)
+
+The GAT encoder learns adaptive importance weights for neighbors.
+
+Instead of averaging all neighbors equally like a GCN, the attention mechanism learns which connections are important. This helps detect camouflage connections between fraud and legitimate transactions.
+
+File location: models/gat_encoder.py
+
+---
+
+## Temporal Modeling (LSTM)
+
+Financial fraud often occurs in transaction sequences such as laundering chains.
+
+Example pattern:
+
+A → B → C → D → E
+
+The temporal module captures behavioral evolution over time using an LSTM network.
+
+The Elliptic dataset contains 49 time steps which are used to compute temporal embeddings and detect abnormal transaction flows.
+
+File location: models/temporal_lstm.py
+
+---
+
+# Dataset
+
+This project uses the Elliptic Bitcoin Dataset.
+
+Dataset characteristics:
+
+Nodes: ~203,769 transactions  
+Edges: ~234,355 transaction flows  
+Features: 166 features per node  
+Time steps: 49 temporal snapshots  
+Classes: Licit or Illicit
+
+Nodes represent Bitcoin transactions and edges represent the movement of funds between transactions.
+
+Dataset loader: data/load_dataset.py
+
+---
+
+# Installation
 
 Clone the repository:
 
-```
-git clone https://github.com/Soham9Mhetre/CP.git
+git clone <repository-url>  
 cd CP
-```
 
 Create a virtual environment:
 
-```
 python -m venv venv
-```
 
-Activate the environment.
+Activate the environment:
 
 Windows:
-
-```
 venv\Scripts\activate
-```
 
 Install dependencies:
 
-```
-pip install -r requirements.txt
-```
+pip install torch  
+pip install torch-geometric  
+pip install scikit-learn
 
 ---
 
-## Running the Project
+# Project Structure
 
-After placing the dataset in `data/raw/`, run:
+CP  
+│  
+├── data  
+│   └── load_dataset.py  
+│  
+├── models  
+│   ├── spectral_filter.py  
+│   ├── gat_encoder.py  
+│   └── temporal_lstm.py  
+│  
+├── training  
+│   └── train.py  
+│  
+└── README.md
 
-```
+---
+
+# Training the Model
+
+Run training using:
+
 python -m training.train
-```
 
-This script will:
+Training uses:
 
-1. Load the transaction graph
-2. Train the Graph Neural Network
-3. Evaluate fraud detection performance
+• Adam optimizer  
+• Weighted Cross Entropy Loss  
+• Class imbalance correction
 
----
+Fraud class weight:
 
-## Evaluation Metrics
+[1 , 9]
 
-The model is evaluated using:
-
-* Accuracy
-* Precision
-* Recall
-* F1 Score
-
-Example results:
-
-| Metric         | Value |
-| -------------- | ----- |
-| Accuracy       | ~0.82 |
-| Fraud Recall   | ~0.66 |
-| Fraud F1 Score | ~0.32 |
-
-The model detects approximately **66% of fraudulent transactions**.
+This ensures the model prioritizes detecting fraud transactions.
 
 ---
 
-## Project Structure
+# Evaluation Metrics
 
-```
-CP/
-│
-models/
-│   gcn.py
-│   spectral_filter.py
-│
-training/
-│   train.py
-│
-data/
-│   raw/
-│
-requirements.txt
-README.md
-.gitignore
-```
+The system is evaluated using:
 
----
+Accuracy  
+Precision  
+Recall  
+F1 Score
 
-## Future Improvements
+Example result:
 
-Possible extensions include:
+Accuracy: 0.89  
 
-* Graph Attention Networks (GAT)
-* Temporal transaction modeling
-* Contrastive learning
-* Uncertainty estimation
+Fraud Precision: 0.33  
+Fraud Recall: 0.68  
+Fraud F1 Score: 0.45
+
+Higher recall indicates the system successfully detects a large portion of fraudulent transactions.
 
 ---
 
-## Author
+# How the System Detects Fraud
 
-Soham Mhetre
-Computer Science (AI & ML)
+The model detects fraud using three mechanisms:
+
+Spectral Defense  
+Removes adversarial noise introduced by graph injection attacks.
+
+Attention Based Edge Filtering  
+Reduces the influence of suspicious connections using graph attention weights.
+
+Temporal Behavior Modeling  
+Captures abnormal transaction sequences and laundering patterns using an LSTM network.
 
 ---
 
-## License
+# Future Improvements
 
-This project is intended for **academic and research purposes**.
+The current system implements the core architecture. Future enhancements include:
+
+Dual-View Contrastive Learning  
+Evidential Deep Learning Head for uncertainty estimation  
+GNNExplainer for interpretability  
+Reinforcement learning based edge pruning
+
+---
+
+# References
+
+Elliptic Bitcoin Dataset  
+PyTorch Geometric Documentation
