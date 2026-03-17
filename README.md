@@ -12,9 +12,16 @@ The project is implemented using PyTorch and PyTorch Geometric and is tested on 
 
 ---
 
+# Project Creator
+
+**Soham Mhetre**  
+B.Tech Computer Science (AI & ML)
+
+---
+
 # Project Architecture
 
-The system follows a Filter → Encode → Temporal Reasoning → Prediction pipeline.
+The system follows a **Filter → Encode → Temporal Reasoning → Prediction** pipeline.
 
 Transaction Graph  
 ↓  
@@ -38,7 +45,8 @@ The spectral filter removes high-frequency adversarial noise in the graph.
 
 Adversarial attacks often inject fake edges to hide fraud nodes. Spectral filtering suppresses these noisy graph signals before the model learns from the data.
 
-File location: models/spectral_filter.py
+File location:  
+models/spectral_filter.py
 
 ---
 
@@ -48,7 +56,8 @@ The GAT encoder learns adaptive importance weights for neighbors.
 
 Instead of averaging all neighbors equally like a GCN, the attention mechanism learns which connections are important. This helps detect camouflage connections between fraud and legitimate transactions.
 
-File location: models/gat_encoder.py
+File location:  
+models/gat_encoder.py
 
 ---
 
@@ -62,15 +71,16 @@ A → B → C → D → E
 
 The temporal module captures behavioral evolution over time using an LSTM network.
 
-The Elliptic dataset contains 49 time steps which are used to compute temporal embeddings and detect abnormal transaction flows.
+The Elliptic dataset contains **49 time steps** which are used to compute temporal embeddings and detect abnormal transaction flows.
 
-File location: models/temporal_lstm.py
+File location:  
+models/temporal_lstm.py
 
 ---
 
 # Dataset
 
-This project uses the Elliptic Bitcoin Dataset.
+This project uses the **Elliptic Bitcoin Dataset**.
 
 Dataset characteristics:
 
@@ -80,9 +90,10 @@ Features: 166 features per node
 Time steps: 49 temporal snapshots  
 Classes: Licit or Illicit
 
-Nodes represent Bitcoin transactions and edges represent the movement of funds between transactions.
+Nodes represent **Bitcoin transactions** and edges represent **movement of funds between transactions**.
 
-Dataset loader: data/load_dataset.py
+Dataset loader:  
+data/load_dataset.py
 
 ---
 
@@ -93,13 +104,14 @@ Clone the repository:
 git clone <repository-url>  
 cd CP
 
-Create a virtual environment:
+Create virtual environment:
 
 python -m venv venv
 
-Activate the environment:
+Activate environment:
 
 Windows:
+
 venv\Scripts\activate
 
 Install dependencies:
