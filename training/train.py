@@ -1,16 +1,33 @@
 import torch
 import torch.nn.functional as F
-
-
-from models.gat_encoder import FraudGAT
-from data.load_dataset import load_dataset
-
 from sklearn.metrics import classification_report
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+from data.load_dataset import load_dataset
+from models.adversarial_injection import inject_adversarial_edges
+from models.gat_encoder import FraudGAT
+
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+
+# =====================
+# Load Dataset
+# =====================
 
 data = load_dataset()
+
+# Inject adversarial nodes
+data = inject_adversarial_edges(data)
+
 data = data.to(device)
+
+# Debug prints (optional)
+print("Total nodes:", data.x.shape[0])
+print("Total edges:", data.edge_index.shape[1])
+
+
+# =====================
+# Model
+# =====================
 
 model = FraudGAT(
     input_dim=data.num_features,
@@ -18,29 +35,43 @@ model = FraudGAT(
     output_dim=2
 ).to(device)
 
-optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
+optimizer = torch.optim.Adam(model.parameters(), lr=0.005)
 
 
-for epoch in range(500):
+# =====================
+# Class Weights
+# =====================
 
-    model.train()
+class_weights = torch.tensor([1.0, 9.0]).to(device)
+
+
+# =====================
+# Training Loop
+# =====================
+print("Unique labels:", torch.unique(data.y))
+model.train()
+
+for epoch in range(250):
+
+    optimizer.zero_grad()
 
     out = model(data.x, data.edge_index, data.time_steps)
-    weights = torch.tensor([1.0, 9.0]).to(device)
 
-    loss = F.cross_entropy(
-    out[data.train_mask],
-    data.y[data.train_mask],
-    weight=weights
-)
-    optimizer.zero_grad()
+    # Ignore fake nodes
+    mask = (data.y == 0) | (data.y == 1)
+
+    loss = F.cross_entropy(out[mask], data.y[mask], weight=class_weights)
+
     loss.backward()
     optimizer.step()
 
-    print("Epoch:", epoch, "Loss:", loss.item())
+    if epoch % 10 == 0:
+        print(f"Epoch: {epoch} Loss: {loss.item()}")
 
 
-
+# =====================
+# Evaluation
+# =====================
 
 model.eval()
 
@@ -50,16 +81,16 @@ with torch.no_grad():
 
     pred = out.argmax(dim=1)
 
-    correct = (pred[data.test_mask] == data.y[data.test_mask]).sum()
+    #  Ignore fake nodes
+    mask = mask = (data.test_mask) & ((data.y == 0) | (data.y == 1))
 
-    acc = int(correct) / int(data.test_mask.sum())
+    correct = (pred[mask] == data.y[mask]).sum()
+
+    acc = int(correct) / int(mask.sum())
 
     print("Test Accuracy:", acc)
-  
 
-print(classification_report(
-    data.y[data.test_mask].cpu(),
-    pred[data.test_mask].cpu()
-))
-
-torch.save(model.state_dict(), "models/gcn_weighted_baseline.pth")
+    print(classification_report(
+        data.y[mask].cpu(),
+        pred[mask].cpu()
+    ))
