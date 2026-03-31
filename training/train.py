@@ -8,7 +8,16 @@ from models.gat_encoder import FraudGAT
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
+def graph_decision(prob):
 
+    if prob > 0.8:
+        return "BLOCK TRANSACTION"
+
+    elif prob > 0.5:
+        return "REQUIRE OTP"
+
+    else:
+        return "ALLOW"
 # =====================
 # Load Dataset
 # =====================
@@ -94,3 +103,26 @@ with torch.no_grad():
         data.y[mask].cpu(),
         pred[mask].cpu()
     ))
+    # ======================
+# PREVENTION SIMULATION
+# ======================
+
+model.eval()
+
+with torch.no_grad():
+
+    out = model(data.x, data.edge_index, data.time_steps)
+    prob = torch.softmax(out, dim=1)[:, 1]
+
+    mask = (data.test_mask) & ((data.y == 0) | (data.y == 1))
+
+    print("\n--- CRYPTO FRAUD PREVENTION ---\n")
+
+    indices = torch.where(mask)[0][:10]  # first 10 test nodes
+
+    for idx in indices:
+
+        p = prob[idx].item()
+        decision = graph_decision(p)
+
+        print(f"Node {idx.item()}: Fraud Prob = {p:.4f} → {decision}")
