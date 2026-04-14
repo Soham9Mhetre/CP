@@ -21,6 +21,11 @@ from app.inference import (
     get_risk_distribution,
     OTP_THRESHOLD,
     BLOCK_THRESHOLD,
+    # Credit card module
+    predict_credit_transaction,
+    get_credit_stats,
+    generate_credit_sample_transactions,
+    get_credit_risk_distribution,
 )
 
 # ── Elliptic entity type labels ───────────────────────────────────────────────
@@ -167,3 +172,80 @@ def risk_distribution():
 @app.route("/api/entity-types", methods=["GET"])
 def entity_types():
     return jsonify(ENTITY_TYPES)
+
+
+# ════════════════════════════════════════════════════════════════════════════════
+# CREDIT CARD MODULE ENDPOINTS  (/api/credit/*)
+# ════════════════════════════════════════════════════════════════════════════════
+
+@app.route("/api/credit/stats", methods=["GET"])
+def credit_stats():
+    return jsonify(get_credit_stats())
+
+
+@app.route("/api/credit/predict", methods=["POST"])
+def credit_predict():
+    """
+    Body (JSON):
+    {
+        "step":         50,    // BankSim time step (1–180)
+        "amount":       250,   // transaction amount in €
+        "category":     2,     // merchant category index (0–11)
+        "age_norm":     0.4,   // customer age normalised (0=young, 1=old)
+        "is_intl":      0,     // 1 = international transaction
+        "hour":         14,    // hour of day (0–23)
+        "txns_24h":     3,     // number of customer transactions in last 24h
+        "avg_amt_7d":   200,   // customer avg spend over past 7 days
+        "distance_km":  15     // km from customer home address
+    }
+    """
+    data = request.get_json(force=True) or {}
+    features = [
+        float(data.get("step",       50)),
+        float(data.get("amount",    250)),
+        float(data.get("category",    2)),
+        float(data.get("age_norm",  0.4)),
+        float(data.get("is_intl",     0)),
+        float(data.get("hour",       14)),
+        float(data.get("txns_24h",    3)),
+        float(data.get("avg_amt_7d", 200)),
+        float(data.get("distance_km", 15)),
+    ]
+
+    result = predict_credit_transaction(features)
+    prob   = result["fraud_probability"]
+    dec    = result["decision"]
+
+    if dec == "BLOCK":
+        action_text = "🚫 Block Transaction"
+        risk_level  = "HIGH"
+        color       = "#ff3864"
+    elif dec == "OTP":
+        action_text = "⚠️  Require OTP Verification"
+        risk_level  = "MEDIUM"
+        color       = "#f7b731"
+    else:
+        action_text = "✅ Allow Transaction"
+        risk_level  = "LOW"
+        color       = "#00f5d4"
+
+    return jsonify({
+        **result,
+        "action_text":     action_text,
+        "risk_level":      risk_level,
+        "color":           color,
+        "input_features":  features,
+        "otp_threshold":   0.5,
+        "block_threshold": 0.8,
+    })
+
+
+@app.route("/api/credit/sample-transactions", methods=["GET"])
+def credit_sample_transactions():
+    n = min(int(request.args.get("n", 18)), 50)
+    return jsonify(generate_credit_sample_transactions(n))
+
+
+@app.route("/api/credit/risk-distribution", methods=["GET"])
+def credit_risk_distribution():
+    return jsonify(get_credit_risk_distribution())

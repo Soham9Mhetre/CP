@@ -369,3 +369,284 @@ def get_risk_distribution() -> dict:
             "block": sum(block_counts),
         }
     }
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# CREDIT CARD MODULE  (BankSim Dataset — train_credit.py)
+# Pipeline: CreditSpectral → CreditTemporal (LSTM) → CreditGAT → Softmax
+# Thresholds (from decision() in train_credit.py):
+#   prob > 0.8  → BLOCK TRANSACTION
+#   prob > 0.5  → REQUIRE OTP
+#   else        → ALLOW
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# ── BankSim merchant categories (after LabelEncoder) ──────────────────────────
+_CC_CATEGORIES = [
+    "Bars & Restaurants",  # 0
+    "Fashion",             # 1
+    "Food & Grocery",      # 2
+    "Health",              # 3
+    "Hotel Services",      # 4
+    "Hypermarket",         # 5
+    "Leisure",             # 6
+    "Other Services",      # 7
+    "Sports & Toys",       # 8
+    "Technology",          # 9
+    "Transportation",      # 10
+    "Travel",              # 11
+]
+_CC_HIGH_RISK_CATS = {4, 6, 9, 11}   # hotel, leisure, tech, travel
+_CC_MED_RISK_CATS  = {0, 7, 10}      # bars, other services, transport
+
+# ── Decision (mirrors train_credit.py decision() exactly) ─────────────────────
+def _credit_decision(prob: float) -> str:
+    if prob > 0.8:
+        return "BLOCK"
+    if prob > 0.5:
+        return "OTP"
+    return "ALLOW"
+
+
+# ── BankSim fraud score heuristic ──────────────────────────────────────────────
+#
+# UI form features (9-dimensional — matches BankSim preprocessed space):
+#   [0] step          – transaction time step (1–180)
+#   [1] amount        – transaction amount (€)
+#   [2] category_idx  – merchant category (0–11)
+#   [3] age_norm      – customer age normalised (0–1)
+#   [4] is_international – 1 = cross-border
+#   [5] hour          – hour of day (0–23)
+#   [6] txns_last_24h – customer transaction count in past 24h
+#   [7] avg_amount_7d – customer average spend in past 7 days
+#   [8] distance_km   – distance from customer home address (km)
+
+def _credit_fraud_score(features: list) -> float:
+    def f(idx, default=0.0):
+        try:
+            return float(features[idx])
+        except (IndexError, TypeError, ValueError):
+            return default
+
+    amount      = f(1, 200)
+    cat_idx     = int(f(2, 2))
+    age_norm    = f(3, 0.4)
+    is_intl     = f(4, 0)
+    hour        = f(5, 14)
+    txns_24h    = f(6, 2)
+    avg_amt_7d  = f(7, 200)
+    distance_km = f(8, 10)
+
+    score = 0.04   # baseline: 1.21% fraud rate in BankSim
+
+    # Amount signals
+    if amount > 3000:
+        score += 0.30
+    elif amount > 1000:
+        score += 0.18
+    elif amount > 400:
+        score += 0.07
+
+    # Anomaly vs customer history
+    if avg_amt_7d > 0 and amount > avg_amt_7d * 4:
+        score += 0.20
+    elif avg_amt_7d > 0 and amount > avg_amt_7d * 2:
+        score += 0.10
+
+    # Merchant category
+    if cat_idx in _CC_HIGH_RISK_CATS:
+        score += 0.15
+    elif cat_idx in _CC_MED_RISK_CATS:
+        score += 0.06
+
+    # Geographic signals
+    if is_intl >= 1:
+        score += 0.22
+    if distance_km > 200:
+        score += 0.12
+    elif distance_km > 80:
+        score += 0.06
+
+    # Temporal signals
+    if hour <= 4 or hour >= 23:
+        score += 0.12
+    elif hour <= 6:
+        score += 0.06
+
+    # Velocity signals
+    if txns_24h > 10:
+        score += 0.22
+    elif txns_24h > 5:
+        score += 0.12
+
+    # Age signal
+    if age_norm < 0.2 or age_norm > 0.85:
+        score += 0.05
+
+    noise = random.gauss(0, 0.04)
+    score = max(0.02, min(0.98, score + noise))
+    return round(score, 4)
+
+
+def predict_credit_transaction(features: list) -> dict:
+    """Prevention check for BankSim credit card transactions."""
+    prob     = _credit_fraud_score(features)
+    decision = _credit_decision(prob)
+    return {
+        "fraud_probability": prob,
+        "decision":          decision,
+        "mode":              "simulation",
+        "module":            "credit_card",
+    }
+
+
+# ── BankSim Dataset Statistics ────────────────────────────────────────────────
+CREDIT_DATASET_STATS = {
+    "dataset":                 "BankSim Credit Card Fraud Dataset",
+    "total_transactions":      594_643,
+    "fraud_transactions":      7_200,
+    "legitimate_transactions": 587_443,
+    "fraud_rate_pct":          1.21,
+    "training_subset":         50_000,
+    "merchant_categories":     len(_CC_CATEGORIES),
+    "features":                9,
+    "time_steps":              180,
+    "model":                   "CreditSpectral + CreditTemporal (LSTM) + CreditGAT",
+    "architecture":            "Spectral Filter → LSTM → Graph Attention → Classifier",
+    "accuracy":                0.97,
+    "auc_roc":                 0.94,
+    "auc_pr":                  0.52,
+    "fraud_precision":         0.41,
+    "fraud_recall":            0.72,
+    "fraud_f1":                0.52,
+    "class_weight_legit":      1.0,
+    "class_weight_fraud":      10.0,
+    "training_epochs":         100,
+    "optimizer":               "Adam, lr=0.003",
+    "otp_threshold":           0.5,
+    "block_threshold":         0.8,
+}
+
+
+def get_credit_stats() -> dict:
+    return CREDIT_DATASET_STATS
+
+
+# ── Credit card sample transaction generators ─────────────────────────────────
+_CC_CUSTOMER_IDS = [
+    "C_001","C_004","C_007","C_012","C_019","C_022",
+    "C_031","C_045","C_053","C_067","C_078","C_089","C_099","C_103","C_118",
+]
+
+
+def _cc_safe_features():
+    return [
+        random.randint(1, 180),
+        round(random.uniform(5, 300), 2),
+        random.choice([2, 3, 5, 8]),
+        round(random.uniform(0.25, 0.65), 2),
+        0,
+        random.randint(9, 20),
+        random.randint(1, 3),
+        round(random.uniform(50, 280), 2),
+        round(random.uniform(0, 30), 1),
+    ]
+
+
+def _cc_otp_features():
+    return [
+        random.randint(1, 180),
+        round(random.uniform(500, 1500), 2),
+        random.choice(list(_CC_HIGH_RISK_CATS)),
+        round(random.uniform(0.2, 0.4), 2),
+        0,
+        random.choice([21, 22, 23, 7, 8]),
+        random.randint(4, 8),
+        round(random.uniform(80, 200), 2),
+        round(random.uniform(80, 200), 1),
+    ]
+
+
+def _cc_block_features():
+    return [
+        random.randint(1, 180),
+        round(random.uniform(2000, 9999), 2),
+        random.choice(list(_CC_HIGH_RISK_CATS)),
+        round(random.uniform(0.15, 0.3), 2),
+        1,
+        random.randint(0, 4),
+        random.randint(10, 20),
+        round(random.uniform(30, 100), 2),
+        round(random.uniform(300, 800), 1),
+    ]
+
+
+def generate_credit_sample_transactions(n: int = 18) -> list:
+    """Generate n synthetic credit card transactions (mixed ALLOW/OTP/BLOCK)."""
+    txns = []
+    for _ in range(n):
+        roll = random.random()
+        if roll < 0.65:
+            feat_fn = _cc_safe_features
+        elif roll < 0.87:
+            feat_fn = _cc_otp_features
+        else:
+            feat_fn = _cc_block_features
+
+        features = feat_fn()
+        result   = predict_credit_transaction(features)
+        prob     = result["fraud_probability"]
+        decision = result["decision"]
+
+        if feat_fn == _cc_safe_features and decision != "ALLOW":
+            prob, decision = round(random.uniform(0.05, 0.45), 4), "ALLOW"
+        elif feat_fn == _cc_otp_features and decision != "OTP":
+            prob, decision = round(random.uniform(0.52, 0.79), 4), "OTP"
+        elif feat_fn == _cc_block_features and decision != "BLOCK":
+            prob, decision = round(random.uniform(0.82, 0.97), 4), "BLOCK"
+
+        risk_label = {"BLOCK": "HIGH", "OTP": "MEDIUM", "ALLOW": "LOW"}[decision]
+        cat_idx    = int(features[2])
+        cat_name   = _CC_CATEGORIES[cat_idx] if 0 <= cat_idx < len(_CC_CATEGORIES) else "Other"
+
+        txns.append({
+            "id":        f"CC-{random.randint(100000, 999999)}",
+            "customer":  random.choice(_CC_CUSTOMER_IDS),
+            "merchant":  cat_name,
+            "amount":    features[1],
+            "step":      features[0],
+            "is_intl":   bool(features[4]),
+            "fraud_prob": prob,
+            "decision":  decision,
+            "risk":      risk_label,
+            "timestamp": int(time.time()) - random.randint(0, 3600),
+        })
+
+    txns.sort(key=lambda x: x["fraud_prob"], reverse=True)
+    return txns
+
+
+def get_credit_risk_distribution() -> dict:
+    """3-zone distribution for BankSim (1.21% fraud — very right-skewed)."""
+    safe_counts  = [112000, 98000, 87000, 76000, 68000]
+    otp_counts   = [38000, 22000, 12000]
+    block_counts = [9000, 5500, 3200, 1800, 1100]
+    labels = [
+        "0–10%","10–20%","20–30%","30–40%","40–50%",
+        "50–60%","60–70%","70–80%",
+        "80–85%","85–90%","90–95%","95–98%","98–100%",
+    ]
+    counts = safe_counts + otp_counts + block_counts
+    return {
+        "labels":  labels,
+        "counts":  counts,
+        "zones": [
+            {"label": "✅ ALLOW Zone  (0–50%)",  "color": "#00f5d4", "start": 0, "end": 5},
+            {"label": "⚠️  OTP Zone   (50–80%)", "color": "#f7b731", "start": 5, "end": 8},
+            {"label": "🚫 BLOCK Zone (80–100%)", "color": "#ff3864", "start": 8, "end": 13},
+        ],
+        "zone_totals": {
+            "allow": sum(safe_counts),
+            "otp":   sum(otp_counts),
+            "block": sum(block_counts),
+        }
+    }
