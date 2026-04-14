@@ -1,0 +1,716 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>CryptoGuard — Blockchain Fraud Prevention System</title>
+  <meta name="description" content="AI-powered real-time fraud prevention for Bitcoin transactions using Spectral-Temporal Graph Neural Networks on the Elliptic dataset."/>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <link rel="stylesheet" href="/css/style.css"/>
+</head>
+<body>
+
+<!-- ── Navbar ──────────────────────────────────────────────────────────────── -->
+<nav class="navbar" role="navigation" aria-label="Main navigation">
+  <div class="navbar-inner">
+    <a class="logo" href="#" aria-label="CryptoGuard Home">
+      <div class="logo-icon">🛡️</div>
+      <span class="logo-text">CryptoGuard</span>
+    </a>
+    <div class="nav-links" role="menubar">
+      <button class="nav-link active" data-section="dashboard"  id="nav-dashboard"  role="menuitem">Dashboard</button>
+      <button class="nav-link"        data-section="prevention" id="nav-prevention" role="menuitem">Prevention Check</button>
+      <button class="nav-link"        data-section="analytics"  id="nav-analytics"  role="menuitem">Analytics</button>
+      <button class="nav-link"        data-section="about"      id="nav-about"      role="menuitem">Architecture</button>
+    </div>
+    <div class="status-indicator" id="system-status" aria-live="polite">
+      <div class="status-dot"></div>
+      <span id="status-text">Prevention Active</span>
+    </div>
+  </div>
+</nav>
+
+<!-- ── Toast ───────────────────────────────────────────────────────────────── -->
+<div class="toast-container" id="toast-container" aria-live="assertive"></div>
+
+<!-- ══════════════════════════════════════════════════════════════════════════
+     SECTION: DASHBOARD
+════════════════════════════════════════════════════════════════════════════ -->
+<div id="dashboard-section" class="page-section">
+
+  <!-- Hero -->
+  <section class="hero">
+    <div class="container">
+      <div class="hero-badge">🔐 Elliptic Bitcoin Dataset · GNN-Powered · 49 Time Steps</div>
+      <h1 class="hero-title">
+        Blockchain Fraud<br/>
+        <span class="gradient-text">Prevented in Real-Time</span>
+      </h1>
+      <p class="hero-subtitle">
+        Spectral-Temporal Graph Neural Network continuously monitors Bitcoin transaction graphs — blocking illicit flows before they complete.
+      </p>
+    </div>
+  </section>
+
+  <!-- KPI Cards -->
+  <div class="container">
+    <div class="kpi-grid">
+
+      <article class="kpi-card" aria-label="Total BTC transactions monitored">
+        <div class="kpi-icon">🔗</div>
+        <div class="kpi-label">BTC Transactions Monitored</div>
+        <div class="kpi-value" id="kpi-total">—</div>
+        <div class="kpi-change up">Elliptic Dataset · 49 time steps</div>
+      </article>
+
+      <article class="kpi-card danger" aria-label="Illicit transactions flagged">
+        <div class="kpi-icon">🚨</div>
+        <div class="kpi-label">Illicit Transactions Blocked</div>
+        <div class="kpi-value" id="kpi-fraud">—</div>
+        <div class="kpi-change down">Labeled illicit in dataset</div>
+      </article>
+
+      <article class="kpi-card purple" aria-label="Fraud recall rate">
+        <div class="kpi-icon">🎯</div>
+        <div class="kpi-label">Fraud Recall Rate</div>
+        <div class="kpi-value" id="kpi-recall">—</div>
+        <div class="kpi-change up">↑ 68% of illicit txns caught</div>
+      </article>
+
+      <article class="kpi-card warning" aria-label="Overall model accuracy">
+        <div class="kpi-icon">📊</div>
+        <div class="kpi-label">Model Accuracy</div>
+        <div class="kpi-value" id="kpi-acc">—</div>
+        <div class="kpi-change up">FraudGAT · Adam · 250 epochs</div>
+      </article>
+
+    </div>
+
+    <!-- Main Grid: Timeline + Feed -->
+    <div class="main-grid">
+
+      <!-- Timeline Chart -->
+      <div class="glass-card">
+        <div class="card-header">
+          <div>
+            <div class="card-title"><span class="icon">📉</span> Illicit Activity Across Time Steps</div>
+            <div class="card-subtitle">Fraud rate (%) per temporal snapshot in the Elliptic dataset — 49 steps total</div>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="chart-wrapper">
+            <canvas id="timelineChart" aria-label="Fraud rate across 49 time steps"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- Live Transaction Feed -->
+      <div class="glass-card">
+        <div class="card-header">
+          <div>
+            <div class="card-title"><span class="icon">⚡</span> Live Transaction Monitor</div>
+            <div class="card-subtitle">Real-time prevention decisions — refreshes every 8 s</div>
+          </div>
+          <button class="btn btn-outline btn-sm" onclick="loadFeed()" aria-label="Refresh feed">↻</button>
+        </div>
+        <div id="txn-feed" class="txn-feed" role="feed" aria-label="BTC transaction prevention feed">
+          <div class="text-center text-muted" style="padding:40px">
+            <div class="spinner"></div>
+            <div style="margin-top:12px;font-size:13px">Connecting to blockchain monitor…</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Risk Zone Distribution -->
+    <div class="glass-card" style="margin-bottom:40px">
+      <div class="card-header">
+        <div>
+          <div class="card-title"><span class="icon">📊</span> Transaction Risk Zone Distribution</div>
+          <div class="card-subtitle">
+            How transactions are distributed across the three prevention zones · thresholds: OTP &gt; 50% · Block &gt; 80%
+          </div>
+        </div>
+      </div>
+      <div class="card-body">
+        <!-- Zone legend strip -->
+        <div class="zone-legend" id="zone-legend">
+          <div class="zone-box allow-zone"><span class="zone-label">✅ ALLOW</span><span class="zone-pct" id="zone-allow-pct">—</span><div class="zone-desc">Score &lt; 50% — Safe transaction. No action required.</div></div>
+          <div class="zone-box otp-zone">  <span class="zone-label">⚠️ OTP</span>  <span class="zone-pct" id="zone-otp-pct">—</span>  <div class="zone-desc">Score 50–80% — Suspicious. OTP verification triggered.</div></div>
+          <div class="zone-box block-zone"><span class="zone-label">🚫 BLOCK</span><span class="zone-pct" id="zone-block-pct">—</span><div class="zone-desc">Score &gt; 80% — Confirmed risk. Transaction blocked immediately.</div></div>
+        </div>
+        <div class="chart-wrapper" style="height:220px;margin-top:16px">
+          <canvas id="distChart" aria-label="Risk zone distribution chart"></canvas>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════════════
+     SECTION: PREVENTION CHECK (formerly Predict)
+════════════════════════════════════════════════════════════════════════════ -->
+<div id="prevention-section" class="page-section" style="display:none;padding-top:100px;padding-bottom:60px">
+  <div class="container">
+
+    <div class="section-header">
+      <h2 class="section-title">🛡️ Transaction Prevention Check</h2>
+      <span class="section-badge" id="model-mode">🧠 Simulation Mode</span>
+    </div>
+
+    <!-- How It Works panel -->
+    <div class="how-it-works glass-card" style="margin-bottom:28px">
+      <div class="card-header">
+        <div class="card-title"><span class="icon">ℹ️</span> How This Prevention System Works</div>
+      </div>
+      <div class="card-body">
+        <div class="how-grid">
+
+          <div class="how-step">
+            <div class="how-num">1</div>
+            <div>
+              <div class="how-title">Enter Transaction Features</div>
+              <div class="how-desc">Supply the graph-level properties of the Bitcoin transaction — its time step, wallet degree (connections), BTC volume, and any known risk signals like suspicious address connections or short wallet lifetime.</div>
+            </div>
+          </div>
+
+          <div class="how-step">
+            <div class="how-num">2</div>
+            <div>
+              <div class="how-title">GNN Computes Fraud Score</div>
+              <div class="how-desc">The Spectral-Temporal GNN processes the transaction's graph neighborhood — the Spectral Filter removes adversarial noise, the GAT weighs suspicious edges, and the LSTM tracks temporal behavior across time steps. This produces a <strong>fraud probability score (0–100%)</strong>.</div>
+            </div>
+          </div>
+
+          <div class="how-step">
+            <div class="how-num">3</div>
+            <div>
+              <div class="how-title">Prevention Decision Is Applied</div>
+              <div class="how-desc">The score is compared to the trained thresholds from <code>graph_decision()</code> in <code>training/train.py</code>:<br/>
+                <span class="threshold-chip allow-chip">Score ≤ 50% → ✅ ALLOW</span>
+                <span class="threshold-chip otp-chip">50% &lt; Score ≤ 80% → ⚠️ Require OTP</span>
+                <span class="threshold-chip block-chip">Score &gt; 80% → 🚫 Block</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="how-step">
+            <div class="how-num">4</div>
+            <div>
+              <div class="how-title">Action Is Enforced Instantly</div>
+              <div class="how-desc">ALLOW — the transaction proceeds. OTP — an extra verification is triggered before funds move. BLOCK — the transaction is halted immediately and flagged for compliance review. The system prevents fraud <strong>before</strong> the transfer completes.</div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <div class="main-grid" style="margin-bottom:24px">
+
+      <!-- Prevention Form -->
+      <div class="glass-card">
+        <div class="card-header">
+          <div class="card-title"><span class="icon">🔍</span> Enter Bitcoin Transaction Details</div>
+        </div>
+        <div class="card-body">
+          <form id="predict-form" novalidate>
+            <div class="form-grid">
+
+              <div class="form-group">
+                <label class="form-label" for="input-timestep">Time Step (1–49)</label>
+                <input type="number" id="input-timestep" class="form-input" value="25" min="1" max="49"
+                       title="Which of the 49 Elliptic temporal snapshots this transaction belongs to"/>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label" for="input-indegree">Incoming Edges (In-Degree)</label>
+                <input type="number" id="input-indegree" class="form-input" value="3" min="0"
+                       title="Number of BTC transactions sending funds TO this wallet"/>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label" for="input-outdegree">Outgoing Edges (Out-Degree)</label>
+                <input type="number" id="input-outdegree" class="form-input" value="3" min="0"
+                       title="Number of BTC transactions sending funds FROM this wallet"/>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label" for="input-vol">Log BTC Volume</label>
+                <input type="number" id="input-vol" class="form-input" value="5.0" step="0.1"
+                       title="Natural log of the BTC amount (log₁ of satoshis). Values 2–12 cover typical ranges."/>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label" for="input-exchange">Connected to Exchange?</label>
+                <select id="input-exchange" class="form-select" title="Is this wallet directly linked to a known crypto exchange?">
+                  <option value="0">No</option>
+                  <option value="1">Yes (e.g. Binance, Coinbase)</option>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label" for="input-service">Connected to Known Service?</label>
+                <select id="input-service" class="form-select" title="Is this wallet linked to a known legitimate service?">
+                  <option value="0">No</option>
+                  <option value="1">Yes (e.g. mining pool, payment processor)</option>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label" for="input-suspicious">Connects to Flagged Address?</label>
+                <select id="input-suspicious" class="form-select" title="Does this transaction directly connect to a previously flagged illicit address?">
+                  <option value="0">No</option>
+                  <option value="1">Yes — flagged address in graph</option>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label" for="input-edges">Local Edge Count</label>
+                <input type="number" id="input-edges" class="form-input" value="10" min="1"
+                       title="Total number of edges in the 1-hop transaction neighborhood"/>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label" for="input-lifetime">Wallet Lifetime (time steps)</label>
+                <input type="number" id="input-lifetime" class="form-input" value="12" min="1" max="49"
+                       title="How many time steps this wallet has been active. Short-lived wallets are more suspicious."/>
+              </div>
+
+            </div>
+
+            <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:8px">
+              <button type="submit" class="btn btn-primary" id="predict-btn">
+                🛡️ Run Prevention Check
+              </button>
+              <button type="button" class="btn btn-outline"
+                      onclick="document.getElementById('predict-form').reset();document.getElementById('predict-result').classList.remove('visible')">
+                ↺ Reset
+              </button>
+            </div>
+
+          </form>
+        </div>
+      </div>
+
+      <!-- Quick Scenarios -->
+      <div class="glass-card">
+        <div class="card-header">
+          <div class="card-title"><span class="icon">⚡</span> Quick Test Scenarios</div>
+        </div>
+        <div class="card-body">
+          <p class="text-muted" style="font-size:13px;margin-bottom:16px">Click any scenario to auto-fill the form and run the prevention check:</p>
+
+          <div style="display:flex;flex-direction:column;gap:10px">
+
+            <button class="txn-item scenario-btn" id="sc-safe"
+              onclick="fillScenario({time_step:25,in_degree:3,out_degree:2,btc_vol_log:4.5,is_exchange:1,is_service:1,suspicious:0,local_edges:8,lifetime:30})"
+              aria-label="Test normal exchange transaction">
+              <div class="txn-risk-badge risk-LOW">✅</div>
+              <div class="txn-info">
+                <div class="txn-id">Normal Exchange Transaction</div>
+                <div class="txn-meta">Exchange wallet · Long-lived · Low volume · No flags</div>
+              </div>
+              <div class="txn-decision decision-ALLOW">ALLOW</div>
+            </button>
+
+            <button class="txn-item scenario-btn" id="sc-mining"
+              onclick="fillScenario({time_step:12,in_degree:1,out_degree:3,btc_vol_log:6.2,is_exchange:0,is_service:1,suspicious:0,local_edges:12,lifetime:22})"
+              aria-label="Test mining pool payout">
+              <div class="txn-risk-badge risk-LOW">✅</div>
+              <div class="txn-info">
+                <div class="txn-id">Mining Pool Payout</div>
+                <div class="txn-meta">Known service · Moderate volume · Normal fan-out</div>
+              </div>
+              <div class="txn-decision decision-ALLOW">ALLOW</div>
+            </button>
+
+            <button class="txn-item scenario-btn" id="sc-otp"
+              onclick="fillScenario({time_step:18,in_degree:2,out_degree:8,btc_vol_log:7.5,is_exchange:0,is_service:0,suspicious:0,local_edges:22,lifetime:5})"
+              aria-label="Test suspicious fan-out pattern">
+              <div class="txn-risk-badge risk-MEDIUM">⚠️</div>
+              <div class="txn-info">
+                <div class="txn-id">Suspicious Fan-Out Pattern</div>
+                <div class="txn-meta">High out-degree · Short-lived wallet · No known service</div>
+              </div>
+              <div class="txn-decision decision-OTP">OTP</div>
+            </button>
+
+            <button class="txn-item scenario-btn" id="sc-block"
+              onclick="fillScenario({time_step:23,in_degree:1,out_degree:15,btc_vol_log:9.8,is_exchange:0,is_service:0,suspicious:1,local_edges:38,lifetime:2})"
+              aria-label="Test darknet / ransomware pattern">
+              <div class="txn-risk-badge risk-HIGH">🚨</div>
+              <div class="txn-info">
+                <div class="txn-id">Darknet / Ransomware Pattern</div>
+                <div class="txn-meta">Flagged address · Very short-lived · Heavy structuring</div>
+              </div>
+              <div class="txn-decision decision-BLOCK">BLOCK</div>
+            </button>
+
+            <button class="txn-item scenario-btn" id="sc-mixing"
+              onclick="fillScenario({time_step:38,in_degree:1,out_degree:20,btc_vol_log:10.5,is_exchange:0,is_service:0,suspicious:1,local_edges:55,lifetime:1})"
+              aria-label="Test mixing service pattern">
+              <div class="txn-risk-badge risk-HIGH">🚨</div>
+              <div class="txn-info">
+                <div class="txn-id">Mixing Service / Laundering</div>
+                <div class="txn-meta">Flagged addresses · 1-step wallet · Extreme fan-out</div>
+              </div>
+              <div class="txn-decision decision-BLOCK">BLOCK</div>
+            </button>
+
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Prevention Result Panel -->
+    <div id="predict-result" class="result-panel" role="alert" aria-live="polite"></div>
+
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════════════
+     SECTION: ANALYTICS
+════════════════════════════════════════════════════════════════════════════ -->
+<div id="analytics-section" class="page-section" style="display:none;padding-top:100px;padding-bottom:60px">
+  <div class="container">
+
+    <div class="section-header">
+      <h2 class="section-title">📊 Prevention Analytics</h2>
+      <span class="section-badge">Elliptic Bitcoin Dataset — 203,769 Transactions</span>
+    </div>
+
+    <!-- Elliptic Model Metrics -->
+    <div class="glass-card" style="margin-bottom:24px">
+      <div class="card-header">
+        <div class="card-title"><span class="icon">🎯</span> FraudGAT Prevention Performance (Elliptic Dataset)</div>
+      </div>
+      <div class="card-body">
+        <div class="stats-grid">
+          <div class="stat-item">
+            <span class="stat-val" id="stat-accuracy">89%</span>
+            <span class="stat-lbl">Overall Accuracy</span>
+            <div style="font-size:11px;color:#64748b;margin-top:6px">Across all labeled test nodes</div>
+          </div>
+          <div class="stat-item">
+            <span class="stat-val" id="stat-recall">68%</span>
+            <span class="stat-lbl">Fraud Recall</span>
+            <div style="font-size:11px;color:#64748b;margin-top:6px">Illicit transactions correctly caught</div>
+          </div>
+          <div class="stat-item">
+            <span class="stat-val" id="stat-precision">33%</span>
+            <span class="stat-lbl">Fraud Precision</span>
+            <div style="font-size:11px;color:#64748b;margin-top:6px">Flagged txns that are truly illicit</div>
+          </div>
+          <div class="stat-item">
+            <span class="stat-val" id="stat-f1">45%</span>
+            <span class="stat-lbl">Fraud F1 Score</span>
+            <div style="font-size:11px;color:#64748b;margin-top:6px">Harmonic mean of precision &amp; recall</div>
+          </div>
+          <div class="stat-item">
+            <span class="stat-val text-amber">9×</span>
+            <span class="stat-lbl">Illicit Class Weight</span>
+            <div style="font-size:11px;color:#64748b;margin-top:6px">Weighted cross-entropy for class imbalance</div>
+          </div>
+          <div class="stat-item">
+            <span class="stat-val text-purple">250</span>
+            <span class="stat-lbl">Training Epochs</span>
+            <div style="font-size:11px;color:#64748b;margin-top:6px">Adam optimizer · lr = 0.005</div>
+          </div>
+        </div>
+
+        <!-- Precision-Recall note -->
+        <div class="metric-note mt-16">
+          <div class="note-icon">💡</div>
+          <div>
+            <strong>Why is Precision low (33%)?</strong> The Elliptic dataset is heavily imbalanced — only ~9.8% of labeled nodes are illicit. The model is tuned with a class weight of 9× on the illicit class, prioritizing <strong>Recall (68%)</strong> over Precision. Catching more fraud (even with some false positives) is more valuable than letting real illicit transactions through. The OTP tier handles borderline cases gracefully.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Charts -->
+    <div class="main-grid" style="margin-bottom:24px">
+      <div class="glass-card">
+        <div class="card-header">
+          <div>
+            <div class="card-title"><span class="icon">📉</span> Illicit Rate Across 49 Time Steps</div>
+            <div class="card-subtitle">% of transactions flagged as illicit per temporal snapshot</div>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="chart-wrapper" style="height:300px">
+            <canvas id="timelineChart2" aria-label="Temporal fraud rate analytics chart"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <div class="glass-card">
+        <div class="card-header">
+          <div>
+            <div class="card-title"><span class="icon">🔢</span> Risk Zone Distribution</div>
+            <div class="card-subtitle">Transaction volume in each prevention zone</div>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="chart-wrapper" style="height:300px">
+            <canvas id="distChart2" aria-label="Risk zone distribution analytics chart"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Decision thresholds -->
+    <div class="glass-card">
+      <div class="card-header">
+        <div class="card-title"><span class="icon">⚖️</span> Prevention Decision Thresholds (from <code>graph_decision()</code> in train.py)</div>
+      </div>
+      <div class="card-body">
+        <div class="stats-grid">
+          <div class="stat-item" style="border-color:rgba(0,245,212,0.30)">
+            <span class="stat-val text-cyan">≤ 50%</span>
+            <span class="stat-lbl">✅ ALLOW</span>
+            <div style="margin-top:8px;font-size:12px;color:#64748b">Transaction proceeds normally. Graph neighborhood shows normal licit patterns. No action required.</div>
+          </div>
+          <div class="stat-item" style="border-color:rgba(247,183,49,0.30)">
+            <span class="stat-val text-amber">50–80%</span>
+            <span class="stat-lbl">⚠️ REQUIRE OTP</span>
+            <div style="margin-top:8px;font-size:12px;color:#64748b">Suspicious graph patterns detected. Moderate fan-out, short lifetime, or unusual time-step activity. Extra verification applied before funds move.</div>
+          </div>
+          <div class="stat-item" style="border-color:rgba(255,56,100,0.30)">
+            <span class="stat-val text-red">&gt; 80%</span>
+            <span class="stat-lbl">🚫 BLOCK</span>
+            <div style="margin-top:8px;font-size:12px;color:#64748b">High-confidence illicit signal. Likely connects to flagged addresses, mixing services, or darknet markets with confirmed fraud topology. Transaction halted immediately.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════════════
+     SECTION: ARCHITECTURE
+════════════════════════════════════════════════════════════════════════════ -->
+<div id="about-section" class="page-section" style="display:none;padding-top:100px;padding-bottom:60px">
+  <div class="container">
+
+    <div class="section-header">
+      <h2 class="section-title">🧠 System Architecture</h2>
+      <span class="section-badge">Spectral-Temporal GNN · Elliptic Bitcoin Dataset</span>
+    </div>
+
+    <!-- Prevention Pipeline -->
+    <div class="glass-card" style="margin-bottom:24px">
+      <div class="card-header">
+        <div class="card-title"><span class="icon">🔄</span> Prevention Pipeline: Filter → Encode → Reason → Prevent</div>
+      </div>
+      <div class="card-body">
+        <div class="pipeline">
+          <div class="pipe-step">
+            <div class="pipe-icon">🪙</div>
+            <div class="pipe-title">Bitcoin Transaction Graph</div>
+            <div class="pipe-desc">203,769 nodes · 234,355 edges · 166 features per node</div>
+          </div>
+          <div class="pipe-arrow">→</div>
+          <div class="pipe-step">
+            <div class="pipe-icon">🌀</div>
+            <div class="pipe-title">Spectral Filter</div>
+            <div class="pipe-desc">Removes adversarial noise from injected fake edges using D⁻½ AD⁻½ smoothing</div>
+          </div>
+          <div class="pipe-arrow">→</div>
+          <div class="pipe-step">
+            <div class="pipe-icon">👁️</div>
+            <div class="pipe-title">Graph Attention Network</div>
+            <div class="pipe-desc">4-head GAT learns which neighbor connections carry fraud signal</div>
+          </div>
+          <div class="pipe-arrow">→</div>
+          <div class="pipe-step">
+            <div class="pipe-icon">⌛</div>
+            <div class="pipe-title">Temporal LSTM</div>
+            <div class="pipe-desc">Tracks illicit behavioral evolution across 49 time snapshots</div>
+          </div>
+          <div class="pipe-arrow">→</div>
+          <div class="pipe-step">
+            <div class="pipe-icon">🎯</div>
+            <div class="pipe-title">Linear Classifier</div>
+            <div class="pipe-desc">Outputs Licit / Illicit probability (class weight 1:9)</div>
+          </div>
+          <div class="pipe-arrow">→</div>
+          <div class="pipe-step" style="border-color:rgba(255,56,100,0.40)">
+            <div class="pipe-icon">🛡️</div>
+            <div class="pipe-title">Prevention Decision</div>
+            <div class="pipe-desc">ALLOW · OTP · BLOCK — enforced before funds move</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Key components -->
+    <div class="glass-card" style="margin-bottom:24px">
+      <div class="card-header">
+        <div class="card-title"><span class="icon">🔑</span> Key System Components</div>
+      </div>
+      <div class="card-body">
+        <div class="stats-grid">
+          <div class="stat-item">
+            <span class="stat-val text-cyan" style="font-size:18px">Spectral Filter</span>
+            <span class="stat-lbl" style="margin-top:6px"><code>models/spectral_filter.py</code></span>
+            <div style="font-size:12px;color:#64748b;margin-top:8px;line-height:1.5">Normalised Laplacian smoothing suppresses high-frequency adversarial noise injected via fake edges. Prevents graph injection attacks from fooling the GAT.</div>
+          </div>
+          <div class="stat-item">
+            <span class="stat-val text-purple" style="font-size:18px">GAT Encoder</span>
+            <span class="stat-lbl" style="margin-top:6px"><code>models/gat_encoder.py</code></span>
+            <div style="font-size:12px;color:#64748b;margin-top:8px;line-height:1.5">Multi-head Graph Attention learns <em>which</em> transaction neighbors matter. Camouflage edges (fraud hiding among licit) get lower attention weights automatically.</div>
+          </div>
+          <div class="stat-item">
+            <span class="stat-val text-amber" style="font-size:18px">Temporal LSTM</span>
+            <span class="stat-lbl" style="margin-top:6px"><code>models/temporal_lstm.py</code></span>
+            <div style="font-size:12px;color:#64748b;margin-top:8px;line-height:1.5">Aggregates per-step embeddings into a sequence fed through an LSTM. Detects laundering chains (A→B→C→D) that only become suspicious over multiple time steps.</div>
+          </div>
+          <div class="stat-item">
+            <span class="stat-val text-red" style="font-size:18px">Adversarial Defence</span>
+            <span class="stat-lbl" style="margin-top:6px"><code>models/adversarial_injection.py</code></span>
+            <div style="font-size:12px;color:#64748b;margin-top:8px;line-height:1.5">Training includes 1,000 synthetic fake nodes with 3 injected edges each, simulating camouflage attacks. The spectral filter is trained to be robust against these.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Elliptic Dataset -->
+    <div class="glass-card" style="margin-bottom:24px">
+      <div class="card-header">
+        <div class="card-title"><span class="icon">🗄️</span> Elliptic Bitcoin Transaction Dataset</div>
+      </div>
+      <div class="card-body">
+        <div class="main-grid" style="grid-template-columns:1fr 1fr;gap:24px">
+          <div>
+            <h3 style="color:var(--accent-cyan);font-size:14px;font-weight:700;margin-bottom:14px">Dataset Properties</h3>
+            <table style="width:100%;font-size:13px;border-collapse:collapse">
+              <tr><td style="padding:7px 0;color:#64748b">Total Nodes</td><td style="font-family:monospace;color:#e2e8f0">203,769 BTC transactions</td></tr>
+              <tr><td style="padding:7px 0;color:#64748b">Total Edges</td><td style="font-family:monospace;color:#e2e8f0">234,355 fund flows</td></tr>
+              <tr><td style="padding:7px 0;color:#64748b">Node Features</td><td style="font-family:monospace;color:#e2e8f0">166 per transaction</td></tr>
+              <tr><td style="padding:7px 0;color:#64748b">Time Steps</td><td style="font-family:monospace;color:#e2e8f0">49 temporal snapshots (~2 weeks each)</td></tr>
+              <tr><td style="padding:7px 0;color:#64748b">Labeled Illicit</td><td style="font-family:monospace;color:#e2e8f0">4,545 (~9.8% of labeled)</td></tr>
+              <tr><td style="padding:7px 0;color:#64748b">Labeled Licit</td><td style="font-family:monospace;color:#e2e8f0">42,019 (~90.2% of labeled)</td></tr>
+              <tr><td style="padding:7px 0;color:#64748b">Unlabeled</td><td style="font-family:monospace;color:#e2e8f0">157,205 (unknown)</td></tr>
+            </table>
+          </div>
+          <div>
+            <h3 style="color:var(--accent-purple);font-size:14px;font-weight:700;margin-bottom:14px">Training Configuration</h3>
+            <table style="width:100%;font-size:13px;border-collapse:collapse">
+              <tr><td style="padding:7px 0;color:#64748b">Model</td><td style="font-family:monospace;color:#e2e8f0">FraudGAT (Spectral+GAT+LSTM)</td></tr>
+              <tr><td style="padding:7px 0;color:#64748b">Hidden Dim</td><td style="font-family:monospace;color:#e2e8f0">64</td></tr>
+              <tr><td style="padding:7px 0;color:#64748b">Output Dim</td><td style="font-family:monospace;color:#e2e8f0">2 (Licit / Illicit)</td></tr>
+              <tr><td style="padding:7px 0;color:#64748b">Loss</td><td style="font-family:monospace;color:#e2e8f0">Weighted CrossEntropy [1, 9]</td></tr>
+              <tr><td style="padding:7px 0;color:#64748b">Optimizer</td><td style="font-family:monospace;color:#e2e8f0">Adam, lr=0.005</td></tr>
+              <tr><td style="padding:7px 0;color:#64748b">Epochs</td><td style="font-family:monospace;color:#e2e8f0">250</td></tr>
+              <tr><td style="padding:7px 0;color:#64748b">Adversarial</td><td style="font-family:monospace;color:#e2e8f0">1,000 fake nodes · 3 edges each</td></tr>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ── Footer ───────────────────────────────────────────────────────────────── -->
+<footer class="footer" role="contentinfo">
+  <p>CryptoGuard &mdash; AI-Powered Bitcoin Fraud Prevention &nbsp;|&nbsp; Spectral-Temporal Graph Neural Network &nbsp;|&nbsp; Elliptic Dataset</p>
+  <p style="margin-top:4px;font-size:11px;color:#1e293b">PyTorch &middot; PyTorch Geometric &middot; Graph Attention Networks &middot; LSTM &middot; Flask</p>
+</footer>
+
+<!-- ── Inline helpers ───────────────────────────────────────────────────────── -->
+<script>
+  function fillScenario(params) {
+    document.getElementById('input-timestep').value  = params.time_step;
+    document.getElementById('input-indegree').value  = params.in_degree;
+    document.getElementById('input-outdegree').value = params.out_degree;
+    document.getElementById('input-vol').value        = params.btc_vol_log;
+    document.getElementById('input-exchange').value  = params.is_exchange;
+    document.getElementById('input-service').value   = params.is_service;
+    document.getElementById('input-suspicious').value= params.suspicious;
+    document.getElementById('input-edges').value     = params.local_edges;
+    document.getElementById('input-lifetime').value  = params.lifetime;
+
+    // Navigate to prevention tab
+    document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
+    document.getElementById('nav-prevention').classList.add('active');
+    document.querySelectorAll('.page-section').forEach(s => s.style.display = 'none');
+    document.getElementById('prevention-section').style.display = '';
+
+    setTimeout(() => document.getElementById('predict-form').requestSubmit(), 300);
+  }
+
+  // Analytics tab second chart initialisation
+  let _analyticsInited = false;
+  document.addEventListener('DOMContentLoaded', () => {
+    const aLink = document.getElementById('nav-analytics');
+    if (aLink) {
+      aLink.addEventListener('click', async () => {
+        if (_analyticsInited) return;
+        _analyticsInited = true;
+        try {
+          const tData = await fetch('/api/timeline').then(r => r.json());
+          const ctx2  = document.getElementById('timelineChart2');
+          if (ctx2) {
+            new Chart(ctx2, {
+              type: 'line',
+              data: {
+                labels: tData.map(d => `T${d.time_step}`),
+                datasets: [{
+                  label: 'Illicit Rate (%)',
+                  data: tData.map(d => d.fraud_rate),
+                  borderColor: '#ff3864',
+                  backgroundColor: 'rgba(255,56,100,0.10)',
+                  fill: true, tension: 0.4, pointRadius: 0, borderWidth: 2,
+                }]
+              },
+              options: {
+                responsive: true, maintainAspectRatio: false,
+                plugins: { legend: { display: false },
+                  tooltip: { callbacks: { label: c => ` Illicit Rate: ${c.parsed.y.toFixed(2)}%` } } },
+                scales: {
+                  x: { grid:{color:'rgba(255,255,255,0.04)'}, ticks:{color:'#64748b',maxTicksLimit:12}, border:{color:'transparent'} },
+                  y: { grid:{color:'rgba(255,255,255,0.04)'}, ticks:{color:'#64748b',callback:v=>v+'%'}, border:{color:'transparent'} }
+                }
+              }
+            });
+          }
+        } catch(e) { console.error(e); }
+
+        try {
+          const dData = await fetch('/api/risk-distribution').then(r => r.json());
+          const cd2   = document.getElementById('distChart2');
+          if (cd2) {
+            const zones  = dData.zones;
+            const colors = dData.labels.map((_, i) => {
+              if (i < zones[1].start) return 'rgba(0,245,212,0.70)';
+              if (i < zones[2].start) return 'rgba(247,183,49,0.70)';
+              return 'rgba(255,56,100,0.70)';
+            });
+            new Chart(cd2, {
+              type: 'bar',
+              data: { labels: dData.labels, datasets: [{ data: dData.counts, backgroundColor: colors, borderRadius: 4, borderSkipped: false }] },
+              options: {
+                responsive: true, maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                  x: { grid:{display:false}, ticks:{color:'#64748b',font:{size:10}}, border:{color:'transparent'} },
+                  y: { grid:{color:'rgba(255,255,255,0.04)'}, ticks:{color:'#64748b'}, border:{color:'transparent'} }
+                }
+              }
+            });
+          }
+        } catch(e) { console.error(e); }
+      });
+    }
+  });
+</script>
+<script src="/js/app.js"></script>
+</body>
+</html>
