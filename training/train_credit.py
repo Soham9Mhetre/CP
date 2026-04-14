@@ -7,8 +7,10 @@ import random
 from data.credit_card_loader import load_credit_card_data
 from models.credit_temporal import CreditTemporal
 from models.credit_spectral import CreditSpectral
-from models.credit_adversarial import inject_adversarial_edges
 from models.credit_gat import CreditGAT
+
+from models.edge_pruning import prune_edges
+from models.drift_detection import detect_drift
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -67,7 +69,7 @@ class_weights = torch.tensor([1.0, 10.0]).to(device)
 # TRAIN
 # ======================
 
-for epoch in range(250):
+for epoch in range(100):
 
     temporal.train()
     gat.train()
@@ -75,12 +77,22 @@ for epoch in range(250):
     optimizer.zero_grad()
 
     x_f = spectral(X, edge_index)
-    edge_adv = inject_adversarial_edges(edge_index, X.shape[0], 0.01)
 
-    x_t = temporal(x_f, None)
-    out = gat(x_t, edge_adv)
+    edge_pruned = prune_edges(edge_index, x_f, threshold=0.05)
 
-    loss = F.cross_entropy(out, y, weight=class_weights)
+    drift_score = detect_drift(x_f)
+
+    temporal_emb = temporal(x_f, None)
+
+    x_g = gat.gat1(temporal_emb, edge_pruned)
+    x_g = F.elu(x_g)
+    graph_emb = gat.gat2(x_g, edge_pruned)
+
+    out = gat.fc(graph_emb)
+
+    loss_contrast = torch.mean((graph_emb - temporal_emb) ** 2)
+
+    loss = F.cross_entropy(out, y, weight=class_weights) + 0.05 * loss_contrast
 
     loss.backward()
     optimizer.step()
@@ -99,22 +111,23 @@ gat.eval()
 with torch.no_grad():
 
     x_f = spectral(X, edge_index)
-    edge_adv = inject_adversarial_edges(edge_index, X.shape[0], 0.01)
 
-    x_t = temporal(x_f, None)
-    out = gat(x_t, edge_adv)
+    edge_pruned = prune_edges(edge_index, x_f, threshold=0.05)
+
+    temporal_emb = temporal(x_f, None)
+
+    x_g = gat.gat1(temporal_emb, edge_pruned)
+    x_g = F.elu(x_g)
+    graph_emb = gat.gat2(x_g, edge_pruned)
+
+    out = gat.fc(graph_emb)
 
     prob = torch.softmax(out, dim=1)[:, 1].cpu()
     y_true = y.cpu()
 
     precision, recall, thresholds = precision_recall_curve(y_true, prob)
-
     f1 = 2 * (precision * recall) / (precision + recall + 1e-8)
-    best_idx = f1.argmax()
-
-    best_threshold = thresholds[best_idx]
-
-    print(f"\nBest threshold: {best_threshold:.3f} (F1={f1[best_idx]:.4f})")
+    best_threshold = thresholds[f1.argmax()]
 
     pred = (prob > best_threshold).long()
 
@@ -124,30 +137,32 @@ with torch.no_grad():
 
 
 # ======================
-# DECISION ENGINE
+# PREVENTION
 # ======================
 
-def decision(prob, threshold):
+def decision(prob, uncertainty, threshold):
 
-    if prob > threshold + 0.2:
+    high = threshold + 0.15
+
+    if uncertainty > 0.6:
+        return "SEND TO ANALYST"
+    elif prob > high:
         return "BLOCK"
-
     elif prob > threshold:
         return "OTP"
-
     else:
         return "ALLOW"
 
 
-# ======================
-# PREVENTION
-# ======================
+confidence = prob
+uncertainty = 1 - confidence
 
-print("\n--- FRAUD PREVENTION ---\n")
+print("\n--- CREDIT FRAUD PREVENTION ---\n")
 
 indices = random.sample(range(len(prob)), 10)
 
 for i in indices:
     p = prob[i].item()
-    label = "FRAUD" if y[i] == 1 else "LEGIT"
-    print(f"Txn {i} [{label}] score={p:.3f} → {decision(p, best_threshold)}")
+    u = uncertainty[i].item()
+
+    print(f"Txn {i}: prob={p:.3f}, unc={u:.3f} → {decision(p, u, best_threshold)}")

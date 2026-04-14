@@ -2,62 +2,104 @@ import torch
 import torch.nn.functional as F
 from sklearn.metrics import classification_report, accuracy_score, precision_recall_curve
 import random
-import copy
 
 from data.load_dataset import load_dataset
 from models.spectral_filter import SpectralFilter
 from models.gat_encoder import FraudGAT
+from models.temporal_lstm import TemporalLSTM
 from models.adversarial_injection import inject_adversarial_edges
+
+from models.edge_pruning import prune_edges
+from models.drift_detection import detect_drift
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
 # ======================
-# LOAD BASE DATA
+# LOAD DATA
 # ======================
 
-base_data = load_dataset()
+data = load_dataset()
+data = data.to(device)
 
 
 # ======================
-# MODEL
+# MODELS
 # ======================
 
 spectral = SpectralFilter(alpha=0.1).to(device)
-model = FraudGAT(base_data.x.shape[1], 32, 2).to(device)
 
-optimizer = torch.optim.Adam(model.parameters(), lr=0.005)
+temporal = TemporalLSTM(data.x.shape[1], data.x.shape[1]).to(device)
+
+model = FraudGAT(data.x.shape[1], 32, 2).to(device)
+
+optimizer = torch.optim.Adam(
+    list(model.parameters()) + list(temporal.parameters()),
+    lr=0.005
+)
+
+class_weights = torch.tensor([1.0, 8.0]).to(device)
+
+# ======================
+# PRECOMPUTE GRAPH (OUTSIDE LOOP)
+# ======================
+
+data_cpu = data.to("cpu")
+data_cpu = inject_adversarial_edges(data_cpu)
+
+edge_index = data_cpu.edge_index.to(device)
 
 
 # ======================
 # TRAIN
 # ======================
 
-for epoch in range(250):
+for epoch in range(200):
 
     model.train()
+    temporal.train()
+
     optimizer.zero_grad()
 
-    # 🔥 clone data every epoch (CRITICAL FIX)
-    data = copy.deepcopy(base_data)
+    x_input = data.x.to(device)
 
-    # ---- move to CPU for adversarial injection ----
-    data = data.to("cpu")
+    # ---- spectral (optimized) ----
+    if epoch % 3 == 0:
+        x = spectral(x_input, edge_index)
+    else:
+        x = x_input
+    
+    x = F.dropout(x, p=0.2, training=model.training)
 
-    # ---- adversarial injection ----
-    data = inject_adversarial_edges(data)
 
-    # ---- move to GPU ----
-    data = data.to(device)
+    # ---- temporal ----
+    temporal_emb = temporal(x, data.time_steps)
 
-    # ---- spectral filtering ----
-    data.x = spectral(data.x, data.edge_index)
+    # ---- edge pruning ----
+    edge_pruned = prune_edges(edge_index, x, threshold=0.15).to(device)
+
+    # ---- graph view ----
+    graph_hidden = model.gat1(x, edge_pruned)
+    graph_hidden = F.elu(graph_hidden)
 
     # ---- forward ----
-    out = model(data.x, data.edge_index, data.time_steps)
+    out = model(x, edge_pruned, data.time_steps)
 
-    # 🔥 use UPDATED masks
-    loss = F.cross_entropy(out[data.train_mask], data.y[data.train_mask])
+    # ---- contrastive ----
+    min_dim = min(graph_hidden.shape[1], temporal_emb.shape[1])
+
+    graph_proj = graph_hidden[:, :min_dim]
+    temporal_proj = temporal_emb[:, :min_dim]
+
+    loss_contrast = torch.mean((graph_proj - temporal_proj) ** 2)
+
+    y_train = data.y.to(device)
+
+    loss = F.cross_entropy(
+        out[data.train_mask],
+        y_train[data.train_mask],
+        weight=class_weights
+    ) + 0.01 * loss_contrast
 
     loss.backward()
     optimizer.step()
@@ -71,36 +113,40 @@ for epoch in range(250):
 # ======================
 
 model.eval()
+temporal.eval()
 
 with torch.no_grad():
 
-    # clone again (same pipeline)
-    data = copy.deepcopy(base_data)
+    data_cpu = data.to("cpu")
+    data_cpu = inject_adversarial_edges(data_cpu)
 
-    data = data.to("cpu")
-    data = inject_adversarial_edges(data)
-    data = data.to(device)
+    edge_index = data_cpu.edge_index
 
-    data.x = spectral(data.x, data.edge_index)
+    # 🔥 FORCE DEVICE AGAIN
+    edge_index = edge_index.to(device)
+    x_input = data.x.to(device)
 
-    out = model(data.x, data.edge_index, data.time_steps)
+    x = spectral(x_input, edge_index)
 
-    prob = torch.softmax(out, dim=1)[:, 1].cpu()
+    edge_pruned = prune_edges(edge_index, x, threshold=0.15)
+    edge_pruned = edge_pruned.to(device)
+
+    out = model(x, edge_pruned, data.time_steps)
+
+    probs_all = torch.softmax(out, dim=1)
+
+    prob = probs_all[:, 1].cpu()
+    confidence = probs_all.max(dim=1)[0].cpu()
+    uncertainty = 1 - confidence
+
     y_true = data.y.cpu()
-
     mask = data.test_mask.cpu()
 
-    # ---- dynamic threshold ----
-    precision, recall, thresholds = precision_recall_curve(
-        y_true[mask], prob[mask]
-    )
-
+    precision, recall, thresholds = precision_recall_curve(y_true[mask], prob[mask])
     f1 = 2 * (precision * recall) / (precision + recall + 1e-8)
-    best_idx = f1.argmax()
 
-    best_threshold = thresholds[best_idx]
-
-    print(f"\nBest threshold: {best_threshold:.3f} (F1={f1[best_idx]:.4f})")
+    best_threshold = thresholds[f1.argmax()]
+    best_threshold = best_threshold * 0.75
 
     pred = (prob > best_threshold).long()
 
@@ -110,24 +156,26 @@ with torch.no_grad():
 
 
 # ======================
-# DECISION ENGINE
+# PREVENTION
 # ======================
 
-def decision(prob, threshold):
+def decision(prob, uncertainty, threshold):
 
-    if prob > threshold + 0.2:
+    low = threshold * 0.6
+    high = threshold + 0.08
+
+    if uncertainty > 0.75:
+        return "SEND TO ANALYST"
+
+    elif prob > high:
         return "BLOCK"
 
-    elif prob > threshold:
+    elif prob > low:
         return "OTP"
 
     else:
         return "ALLOW"
 
-
-# ======================
-# PREVENTION
-# ======================
 
 print("\n--- CRYPTO FRAUD PREVENTION ---\n")
 
@@ -135,4 +183,6 @@ indices = random.sample(range(len(prob)), 10)
 
 for i in indices:
     p = prob[i].item()
-    print(f"Node {i}: {p:.3f} → {decision(p, best_threshold)}")
+    u = uncertainty[i].item()
+
+    print(f"Node {i}: prob={p:.3f}, unc={u:.3f} → {decision(p, u, best_threshold)}")
