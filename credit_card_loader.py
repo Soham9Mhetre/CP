@@ -1,41 +1,70 @@
 import pandas as pd
 import torch
 from sklearn.preprocessing import LabelEncoder, StandardScaler
-import numpy as np
 
 
 def load_credit_card_data(path):
 
+    # ======================
+    # LOAD DATA
+    # ======================
     df = pd.read_csv(path)
 
-    # Strip quotes
-    df = df.map(lambda x: str(x).replace("'", "") if isinstance(x, str) else x)
+    # ======================
+    # CLEAN STRINGS (VERY IMPORTANT)
+    # ======================
+    df = df.applymap(lambda x: str(x).replace("'", "") if isinstance(x, str) else x)
 
-    # Drop useless columns
-    for col in ["zipcodeOri", "zipMerchant"]:
+    # ======================
+    # DROP USELESS COLUMNS
+    # ======================
+    drop_cols = ["zipcodeOri", "zipMerchant"]
+    for col in drop_cols:
         if col in df.columns:
-            df.drop(col, axis=1, inplace=True)
+            df = df.drop(col, axis=1)
 
-    # Encode categoricals
+    # ======================
+    # HANDLE MISSING VALUES
+    # ======================
+    df = df.fillna(0)
+
+    # ======================
+    # ENCODE CATEGORICAL
+    # ======================
     for col in df.columns:
         if df[col].dtype == "object":
-            df[col] = LabelEncoder().fit_transform(df[col].astype(str))
+            le = LabelEncoder()
+            df[col] = le.fit_transform(df[col].astype(str))
 
-    # Sort by time
+    # ======================
+    # SORT BY TIME (CRITICAL)
+    # ======================
     if "step" in df.columns:
         df = df.sort_values("step").reset_index(drop=True)
 
-    # Feature engineering
-    if "amount" in df.columns:
-        df["log_amount"] = np.log1p(df["amount"].astype(float))
-
+    # ======================
+    # TARGET
+    # ======================
     y = df["fraud"].astype(int).values
-    X = df.drop("fraud", axis=1).astype(float)
 
+    # ======================
+    # FEATURES
+    # ======================
+    X = df.drop("fraud", axis=1)
+
+    # Ensure numeric
+    X = X.astype(float)
+
+    # ======================
+    # NORMALIZE FEATURES
+    # ======================
     scaler = StandardScaler()
     X = scaler.fit_transform(X)
 
-    return (
-        torch.tensor(X, dtype=torch.float),
-        torch.tensor(y, dtype=torch.long),
-    )
+    # ======================
+    # CONVERT TO TENSORS
+    # ======================
+    X = torch.tensor(X, dtype=torch.float)
+    y = torch.tensor(y, dtype=torch.long)
+
+    return X, y
