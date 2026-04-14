@@ -1,128 +1,138 @@
 import torch
 import torch.nn.functional as F
-from sklearn.metrics import classification_report
+from sklearn.metrics import classification_report, accuracy_score, precision_recall_curve
+import random
+import copy
 
 from data.load_dataset import load_dataset
-from models.adversarial_injection import inject_adversarial_edges
+from models.spectral_filter import SpectralFilter
 from models.gat_encoder import FraudGAT
+from models.adversarial_injection import inject_adversarial_edges
 
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-
-def graph_decision(prob):
-
-    if prob > 0.8:
-        return "BLOCK TRANSACTION"
-
-    elif prob > 0.5:
-        return "REQUIRE OTP"
-
-    else:
-        return "ALLOW"
-# =====================
-# Load Dataset
-# =====================
-
-data = load_dataset()
-
-# Inject adversarial nodes
-data = inject_adversarial_edges(data)
-
-data = data.to(device)
-
-# Debug prints (optional)
-print("Total nodes:", data.x.shape[0])
-print("Total edges:", data.edge_index.shape[1])
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
-# =====================
-# Model
-# =====================
+# ======================
+# LOAD BASE DATA
+# ======================
 
-model = FraudGAT(
-    input_dim=data.num_features,
-    hidden_dim=64,
-    output_dim=2
-).to(device)
+base_data = load_dataset()
+
+
+# ======================
+# MODEL
+# ======================
+
+spectral = SpectralFilter(alpha=0.1).to(device)
+model = FraudGAT(base_data.x.shape[1], 32, 2).to(device)
 
 optimizer = torch.optim.Adam(model.parameters(), lr=0.005)
 
 
-# =====================
-# Class Weights
-# =====================
-
-class_weights = torch.tensor([1.0, 9.0]).to(device)
-
-
-# =====================
-# Training Loop
-# =====================
-print("Unique labels:", torch.unique(data.y))
-model.train()
+# ======================
+# TRAIN
+# ======================
 
 for epoch in range(250):
 
+    model.train()
     optimizer.zero_grad()
 
+    # 🔥 clone data every epoch (CRITICAL FIX)
+    data = copy.deepcopy(base_data)
+
+    # ---- move to CPU for adversarial injection ----
+    data = data.to("cpu")
+
+    # ---- adversarial injection ----
+    data = inject_adversarial_edges(data)
+
+    # ---- move to GPU ----
+    data = data.to(device)
+
+    # ---- spectral filtering ----
+    data.x = spectral(data.x, data.edge_index)
+
+    # ---- forward ----
     out = model(data.x, data.edge_index, data.time_steps)
 
-    # Ignore fake nodes
-    mask = (data.y == 0) | (data.y == 1)
-
-    loss = F.cross_entropy(out[mask], data.y[mask], weight=class_weights)
+    # 🔥 use UPDATED masks
+    loss = F.cross_entropy(out[data.train_mask], data.y[data.train_mask])
 
     loss.backward()
     optimizer.step()
 
     if epoch % 10 == 0:
-        print(f"Epoch: {epoch} Loss: {loss.item()}")
+        print(f"Epoch {epoch} Loss {loss.item()}")
 
 
-# =====================
-# Evaluation
-# =====================
-
-model.eval()
-
-with torch.no_grad():
-
-    out = model(data.x, data.edge_index, data.time_steps)
-
-    pred = out.argmax(dim=1)
-
-    #  Ignore fake nodes
-    mask = mask = (data.test_mask) & ((data.y == 0) | (data.y == 1))
-
-    correct = (pred[mask] == data.y[mask]).sum()
-
-    acc = int(correct) / int(mask.sum())
-
-    print("Test Accuracy:", acc)
-
-    print(classification_report(
-        data.y[mask].cpu(),
-        pred[mask].cpu()
-    ))
-    # ======================
-# PREVENTION SIMULATION
+# ======================
+# EVALUATION
 # ======================
 
 model.eval()
 
 with torch.no_grad():
 
+    # clone again (same pipeline)
+    data = copy.deepcopy(base_data)
+
+    data = data.to("cpu")
+    data = inject_adversarial_edges(data)
+    data = data.to(device)
+
+    data.x = spectral(data.x, data.edge_index)
+
     out = model(data.x, data.edge_index, data.time_steps)
-    prob = torch.softmax(out, dim=1)[:, 1]
 
-    mask = (data.test_mask) & ((data.y == 0) | (data.y == 1))
+    prob = torch.softmax(out, dim=1)[:, 1].cpu()
+    y_true = data.y.cpu()
 
-    print("\n--- CRYPTO FRAUD PREVENTION ---\n")
+    mask = data.test_mask.cpu()
 
-    indices = torch.where(mask)[0][:10]  # first 10 test nodes
+    # ---- dynamic threshold ----
+    precision, recall, thresholds = precision_recall_curve(
+        y_true[mask], prob[mask]
+    )
 
-    for idx in indices:
+    f1 = 2 * (precision * recall) / (precision + recall + 1e-8)
+    best_idx = f1.argmax()
 
-        p = prob[idx].item()
-        decision = graph_decision(p)
+    best_threshold = thresholds[best_idx]
 
-        print(f"Node {idx.item()}: Fraud Prob = {p:.4f} → {decision}")
+    print(f"\nBest threshold: {best_threshold:.3f} (F1={f1[best_idx]:.4f})")
+
+    pred = (prob > best_threshold).long()
+
+    print("\n--- CRYPTO FRAUD EVALUATION ---\n")
+    print("Accuracy:", accuracy_score(y_true[mask], pred[mask]))
+    print(classification_report(y_true[mask], pred[mask]))
+
+
+# ======================
+# DECISION ENGINE
+# ======================
+
+def decision(prob, threshold):
+
+    if prob > threshold + 0.2:
+        return "BLOCK"
+
+    elif prob > threshold:
+        return "OTP"
+
+    else:
+        return "ALLOW"
+
+
+# ======================
+# PREVENTION
+# ======================
+
+print("\n--- CRYPTO FRAUD PREVENTION ---\n")
+
+indices = random.sample(range(len(prob)), 10)
+
+for i in indices:
+    p = prob[i].item()
+    print(f"Node {i}: {p:.3f} → {decision(p, best_threshold)}")

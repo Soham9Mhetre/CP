@@ -13,7 +13,7 @@ def load_credit_card_data(path):
     # ======================
     # CLEAN STRINGS (VERY IMPORTANT)
     # ======================
-    df = df.applymap(lambda x: str(x).replace("'", "") if isinstance(x, str) else x)
+    df = df.map(lambda x: str(x).replace("'", "") if isinstance(x, str) else x)
 
     # ======================
     # DROP USELESS COLUMNS
