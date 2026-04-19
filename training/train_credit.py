@@ -1,43 +1,60 @@
 import torch
 import torch.nn.functional as F
-from sklearn.metrics import classification_report, accuracy_score, precision_recall_curve
-from sklearn.neighbors import NearestNeighbors
-import random
+from sklearn.metrics import classification_report, accuracy_score
+from sklearn.model_selection import train_test_split
 
 from data.credit_card_loader import load_credit_card_data
 from models.credit_temporal import CreditTemporal
 from models.credit_spectral import CreditSpectral
 from models.credit_gat import CreditGAT
-
 from models.edge_pruning import prune_edges
-from models.drift_detection import detect_drift
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-
-# ======================
+# -------------------------
 # LOAD DATA
-# ======================
-
+# -------------------------
 X, y = load_credit_card_data("data/banksim.csv")
 
-X = X[:50000].to(device)
-y = y[:50000].to(device)
+X = X.to(device)
+y = y.to(device)
 
+# -------------------------
+# SPLIT
+# -------------------------
+idx = torch.arange(len(y))
+train_idx, temp_idx = train_test_split(idx.cpu(), test_size=0.3)
+val_idx, test_idx = train_test_split(temp_idx, test_size=0.5)
 
-# ======================
-# GRAPH
-# ======================
+train_idx = torch.tensor(train_idx).to(device)
+val_idx = torch.tensor(val_idx).to(device)
+test_idx = torch.tensor(test_idx).to(device)
+
+# -------------------------
+# MODEL
+# -------------------------
+input_dim = X.shape[1]
+
+spectral = CreditSpectral(alpha=0.1)
+temporal = CreditTemporal(input_dim, 32).to(device)
+gat = CreditGAT(32, 32).to(device)
+
+optimizer = torch.optim.Adam(
+    list(temporal.parameters()) + list(gat.parameters()),
+    lr=0.005
+)
+
+# -------------------------
+# BUILD GRAPH
+# -------------------------
+from sklearn.neighbors import NearestNeighbors
 
 def build_graph(x):
-
     X_np = x.cpu().numpy()
-
     nbrs = NearestNeighbors(n_neighbors=5).fit(X_np)
     _, indices = nbrs.kneighbors(X_np)
 
     edges = []
-
     for i in range(len(indices)):
         for j in indices[i]:
             if i != j:
@@ -45,124 +62,100 @@ def build_graph(x):
 
     return torch.tensor(edges).t().to(device)
 
-
 edge_index = build_graph(X)
 
-
-# ======================
-# MODELS
-# ======================
-
-spectral = CreditSpectral(alpha=0.1)
-temporal = CreditTemporal(X.shape[1], 32).to(device)
-gat = CreditGAT(32, 32).to(device)
-
-optimizer = torch.optim.Adam(
-    list(temporal.parameters()) + list(gat.parameters()),
-    lr=0.003
-)
-
-class_weights = torch.tensor([1.0, 10.0]).to(device)
-
-
-# ======================
+# -------------------------
 # TRAIN
-# ======================
-
-for epoch in range(100):
-
+# -------------------------
+for epoch in range(200):
     temporal.train()
     gat.train()
 
-    optimizer.zero_grad()
-
     x_f = spectral(X, edge_index)
-
     edge_pruned = prune_edges(edge_index, x_f, threshold=0.05)
 
-    drift_score = detect_drift(x_f)
+    emb = temporal(x_f, None)
 
-    temporal_emb = temporal(x_f, None)
+    x_g = gat.gat1(emb, edge_pruned)
+    x_g = torch.relu(x_g)
 
-    x_g = gat.gat1(temporal_emb, edge_pruned)
-    x_g = F.elu(x_g)
     graph_emb = gat.gat2(x_g, edge_pruned)
+    logits = gat.fc(graph_emb)
 
-    out = gat.fc(graph_emb)
+    loss = F.cross_entropy(logits[train_idx], y[train_idx])
 
-    loss_contrast = torch.mean((graph_emb - temporal_emb) ** 2)
-
-    loss = F.cross_entropy(out, y, weight=class_weights) + 0.05 * loss_contrast
-
+    optimizer.zero_grad()
     loss.backward()
     optimizer.step()
 
     if epoch % 10 == 0:
         print(f"Epoch {epoch} Loss {loss.item()}")
 
-
-# ======================
-# EVALUATION
-# ======================
-
+# -------------------------
+# EVAL
+# -------------------------
 temporal.eval()
 gat.eval()
 
 with torch.no_grad():
-
     x_f = spectral(X, edge_index)
-
     edge_pruned = prune_edges(edge_index, x_f, threshold=0.05)
 
-    temporal_emb = temporal(x_f, None)
-
-    x_g = gat.gat1(temporal_emb, edge_pruned)
-    x_g = F.elu(x_g)
+    emb = temporal(x_f, None)
+    x_g = gat.gat1(emb, edge_pruned)
+    x_g = torch.relu(x_g)
     graph_emb = gat.gat2(x_g, edge_pruned)
 
-    out = gat.fc(graph_emb)
+    logits = gat.fc(graph_emb)
+    preds = logits.argmax(dim=1)
 
-    prob = torch.softmax(out, dim=1)[:, 1].cpu()
-    y_true = y.cpu()
+    print("\n--- CREDIT EVALUATION ---\n")
+    print("Accuracy:", accuracy_score(y[test_idx].cpu(), preds[test_idx].cpu()))
+    print(classification_report(y[test_idx].cpu(), preds[test_idx].cpu()))
 
-    precision, recall, thresholds = precision_recall_curve(y_true, prob)
-    f1 = 2 * (precision * recall) / (precision + recall + 1e-8)
-    best_threshold = thresholds[f1.argmax()]
+# -------------------------
+# CALIBRATION
+# -------------------------
+import torch.nn as nn
 
-    pred = (prob > best_threshold).long()
+class TempScaler(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.T = nn.Parameter(torch.ones(1))
 
-    print("\n--- CREDIT FRAUD EVALUATION ---\n")
-    print("Accuracy:", accuracy_score(y_true, pred))
-    print(classification_report(y_true, pred))
-
-
-# ======================
-# PREVENTION
-# ======================
-
-def decision(prob, uncertainty, threshold):
-
-    high = threshold + 0.15
-
-    if uncertainty > 0.6:
-        return "SEND TO ANALYST"
-    elif prob > high:
-        return "BLOCK"
-    elif prob > threshold:
-        return "OTP"
-    else:
-        return "ALLOW"
+    def forward(self, logits):
+        return logits / self.T
 
 
-confidence = prob
-uncertainty = 1 - confidence
+def calibrate_temperature(logits, labels):
+    scaler = TempScaler().to(logits.device)
+    optimizer = torch.optim.LBFGS([scaler.T], lr=0.01, max_iter=50)
 
-print("\n--- CREDIT FRAUD PREVENTION ---\n")
+    loss_fn = nn.CrossEntropyLoss()
 
-indices = random.sample(range(len(prob)), 10)
+    def closure():
+        optimizer.zero_grad()
+        loss = loss_fn(scaler(logits), labels)
+        loss.backward()
+        return loss
 
-for i in indices:
-    p = prob[i].item()
-    u = uncertainty[i].item()
+    optimizer.step(closure)
+    return scaler.T.item()
 
-    print(f"Txn {i}: prob={p:.3f}, unc={u:.3f} → {decision(p, u, best_threshold)}")
+
+temperature = calibrate_temperature(logits[val_idx], y[val_idx])
+
+print(f"\nLearned temperature: {temperature}")
+
+# -------------------------
+# SAVE
+# -------------------------
+torch.save({
+    "temporal_state_dict": temporal.state_dict(),
+    "gat_state_dict": gat.state_dict(),
+    "input_dim": input_dim,
+    "threshold": 0.5,
+    "temperature": float(temperature)
+}, "models/credit_model.pth")
+
+print("\nCredit model saved.")
