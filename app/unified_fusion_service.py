@@ -4,9 +4,6 @@ from app.inference_crypto import predict_crypto
 from app.inference_credit import predict_credit, initialize_credit_pipeline
 from app.fusion_engine import FusionEngine
 
-from data.load_dataset import load_dataset
-from data.credit_card_loader import load_credit_card_data
-
 
 class UnifiedFusionSystem:
 
@@ -15,7 +12,6 @@ class UnifiedFusionSystem:
         self.initialized = False
 
     def _initialize(self, crypto_data, credit_data):
-        # Initialize credit pipeline once
         initialize_credit_pipeline(credit_data)
         self.initialized = True
 
@@ -24,13 +20,26 @@ class UnifiedFusionSystem:
         if not self.initialized:
             self._initialize(crypto_data, credit_data)
 
-        crypto_outputs = []
-        credit_outputs = []
+        results = []
         fused_probs = []
-        labels = []
 
         # -------------------------
-        # RUN PREDICTIONS
+        # FIRST PASS (threshold learning)
+        # -------------------------
+        for i in range(num_samples):
+
+            c_out = predict_crypto(crypto_data, i)
+            k_out = predict_credit(credit_data, i)
+
+            prob, _ = self.fusion.fuse(c_out, k_out)
+            fused_probs.append(prob)
+
+        # Dummy labels (same as demo logic)
+        labels = [1 if p > 0.7 else 0 for p in fused_probs]
+        self.fusion.fit_thresholds(fused_probs, labels)
+
+        # -------------------------
+        # FINAL PASS
         # -------------------------
         for i in range(num_samples):
 
@@ -39,41 +48,15 @@ class UnifiedFusionSystem:
 
             prob, mode = self.fusion.fuse(c_out, k_out)
 
-            crypto_outputs.append(c_out)
-            credit_outputs.append(k_out)
-            fused_probs.append(prob)
-
-            # dummy labels (only for threshold fitting)
-            labels.append(1 if prob > 0.7 else 0)
-
-        # -------------------------
-        # FIT THRESHOLDS
-        # -------------------------
-        self.fusion.fit_thresholds(fused_probs, labels)
-
-        # -------------------------
-        # FINAL RESULTS
-        # -------------------------
-        results = []
-
-        for i in range(num_samples):
-
-            c_out = crypto_outputs[i]
-            k_out = credit_outputs[i]
-
-            prob, mode = self.fusion.fuse(c_out, k_out)
-
-            # ✅ FIXED uncertainty
             uncertainty = 1 - abs(prob - 0.5) * 2
-
             decision = self.fusion.decide(prob, uncertainty)
 
             results.append({
                 "txn_id": i,
-                "crypto_prob": c_out["fraud_prob"],
-                "credit_prob": k_out["fraud_prob"],
-                "final_prob": prob,
-                "uncertainty": uncertainty,
+                "crypto_prob": float(c_out["fraud_prob"]),
+                "credit_prob": float(k_out["fraud_prob"]),
+                "final_prob": float(prob),
+                "uncertainty": float(uncertainty),
                 "decision": decision,
                 "mode": mode
             })

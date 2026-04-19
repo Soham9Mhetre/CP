@@ -37,8 +37,8 @@ def run():
     num_fraud = min(100, len(fraud_idx))
     num_normal = sample_size - num_fraud
 
-    fraud_sample = fraud_idx[:num_fraud]
-    normal_sample = normal_idx[:num_normal]
+    fraud_sample = fraud_idx[torch.randperm(len(fraud_idx))[:num_fraud]]
+    normal_sample = normal_idx[torch.randperm(len(normal_idx))[:num_normal]]
 
     indices = torch.cat([fraud_sample, normal_sample])
 
