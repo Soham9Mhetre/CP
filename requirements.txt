@@ -17,3 +17,5 @@ tqdm>=4.66
 
 seaborn>=0.13
 deeprobust>=0.2.9
+
+streamlit>=1.30
