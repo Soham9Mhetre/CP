@@ -4,145 +4,90 @@
 
 This repository implements a **real-time, multi-modal fraud prevention system** utilizing deep learning techniques that combine **graph modeling**, **temporal learning**, and **dual-view contrastive learning**. 
 
-The system operates across two independent yet architecturally aligned modules:
+The system operates across two independent yet architecturally aligned modules, seamlessly integrated via a **Unified Fusion Engine**:
 1. **Crypto Fraud Prevention System**
 2. **Credit Card Fraud Prevention System**
 
-Unlike traditional systems that merely classify transactions as legitimate or fraudulent, this system **takes actionable decisions** (ALLOW, OTP, BLOCK, SEND TO ANALYST) — making it a true end-to-end fraud prevention pipeline. It features robust dynamic thresholding optimized for the Area Under the Precision-Recall Curve (AUC-PR).
+Unlike traditional systems that merely classify transactions as legitimate or fraudulent, this system **takes actionable decisions** (ALLOW, OTP, BLOCK, SEND TO ANALYST) — making it a true end-to-end fraud prevention pipeline. It features an interactive UI dashboard and robust dynamic thresholding optimized for runtime adaptive percentile limits.
 
 ---
 
 ## 🏗️ System Architecture
 
-### 1. Crypto Fraud Prevention Module
+### 1. Unified Fusion System
+The integration architecture utilizes an intelligent confidence-based weighting engine that fuses independent probability vectors to establish dynamic bounds on inference outputs.
+
+**Architecture Diagram:**
+```text
+          ┌────────────────┐       ┌────────────────┐
+          │ Crypto Network │       │ Credit Network │
+          └────────┬───────┘       └───────┬────────┘
+                   │                       │
+      (prob, uncert)       (prob, uncert)
+                   │                       │
+                   ▼                       ▼
+          ┌─────────────────────────────────────────┐
+          │         Unified Fusion Engine           │
+          │  - Confidence Weighting & Scaling       │
+          │  - Dual-Modal Probability Aggregation   │
+          │  - Adaptive Percentile Thresholding     │
+          └────────────────────┬────────────────────┘
+                               │
+                               ▼
+          ┌─────────────────────────────────────────┐
+          │            Decision Engine              │
+          │   (ALLOW / OTP / BLOCK / ANALYST)       │
+          └────────────────────┬────────────────────┘
+                               │
+                               ▼
+          ┌─────────────────────────────────────────┐
+          │      Streamlit Interactive Dashboard    │
+          └─────────────────────────────────────────┘
+```
+
+### 2. Crypto Fraud Prevention Module
 
 The Crypto module is designed to map wallets as nodes and transactions as edges. It accounts for complex network topologies and malicious obfuscations via adversarial edge injections and temporal sequences.
 
-**Architecture Diagram:**
-```text
-            ┌──────────────────────┐
-            │  Crypto Transactions │
-            └─────────┬────────────┘
-                      ↓
-            ┌──────────────────────┐
-            │ Graph Construction   │
-            └─────────┬────────────┘
-                      ↓
-            ┌──────────────────────┐
-            │ Adversarial Injection│
-            └─────────┬────────────┘
-                      ↓
-            ┌──────────────────────┐
-            │ Spectral Filtering   │
-            └─────────┬────────────┘
-                      ↓
-        ┌─────────────┴─────────────┐
-        ↓                           ↓
- ┌──────────────┐           ┌──────────────┐
- │   GAT (Graph)│           │  LSTM (Time) │
- └──────┬───────┘           └──────┬───────┘
-        ↓                          ↓
-        └──────────┬───────────────┘
-                   ↓
-        ┌──────────────────────────┐
-        │ Contrastive Learning     │
-        └─────────┬────────────────┘
-                  ↓
-        ┌──────────────────────────┐
-        │ Fraud Probability Output │
-        └─────────┬────────────────┘
-                  ↓
-        ┌──────────────────────────┐
-        │ Decision Engine          │
-        └─────────┬────────────────┘
-                  ↓
-   ┌────────┬────────┬────────┬────────┐
-   │ ALLOW  │  OTP   │ BLOCK  │ ANALYST│
-   └────────┴────────┴────────┴────────┘
-```
-
 **System Flow Graph:**
 ```mermaid
 graph TD
-    A[Raw Crypto Transactions] --> B(Graph Construction: Nodes=Wallets, Edges=Txs);
-    B --> C(Adversarial Edge Injection);
-    C --> D(Spectral Filtering);
-    D --> E{Feature Split};
-    E --> F[Graph Attention Network - GAT];
-    E --> G[Temporal LSTM];
-    F --> H(Dual-View Contrastive Learning);
-    G --> H;
-    H --> I[Fraud Probability Vector];
-    I --> J[Dynamic Decision Engine];
+    A[Raw Crypto Transactions] --> B(Graph Construction: Nodes=Wallets, Edges=Txs)
+    B --> C(Adversarial Edge Injection)
+    C --> D(Spectral Filtering)
+    D --> E{Feature Split}
+    E --> F[Graph Attention Network - GAT]
+    E --> G[Temporal LSTM]
+    F --> H(Dual-View Contrastive Learning)
+    G --> H
+    H --> I[Fraud Probability Vector]
+    I --> J[Fusion Input]
 ```
 
-### 2. Credit Card Fraud Prevention Module
+### 3. Credit Card Fraud Prevention Module
 
 The Credit Card module structures transactional tabular data into a network using k-Nearest Neighbors (k-NN) to uncover hidden relationships between functionally similar transactions (e.g., geographic overlapping, merchant overlaps).
 
-**Architecture Diagram:**
-```text
-            ┌──────────────────────┐
-            │ Tabular Credit Data  │
-            └─────────┬────────────┘
-                      ↓
-            ┌──────────────────────┐
-            │ k-NN Graph (k=5)     │
-            └─────────┬────────────┘
-                      ↓
-            ┌──────────────────────┐
-            │ Spectral Filtering   │
-            └─────────┬────────────┘
-                      ↓
-            ┌──────────────────────┐
-            │ Edge Pruning & Drift │
-            └─────────┬────────────┘
-                      ↓
-        ┌─────────────┴─────────────┐
-        ↓                           ↓
- ┌──────────────┐           ┌──────────────┐
- │  Credit GAT  │           │ Credit LSTM  │
- └──────┬───────┘           └──────┬───────┘
-        ↓                          ↓
-        └──────────┬───────────────┘
-                   ↓
-        ┌──────────────────────────┐
-        │ Contrastive Learning     │
-        └─────────┬────────────────┘
-                  ↓
-        ┌──────────────────────────┐
-        │ Fraud Probability Output │
-        └─────────┬────────────────┘
-                  ↓
-        ┌──────────────────────────┐
-        │ Decision Engine          │
-        └─────────┬────────────────┘
-                  ↓
-   ┌────────┬────────┬────────┬────────┐
-   │ ALLOW  │  OTP   │ BLOCK  │ ANALYST│
-   └────────┴────────┴────────┴────────┘
-```
-
 **System Flow Graph:**
 ```mermaid
 graph TD
-    A[Tabular Transaction Data] --> B(k-NN Graph Construction k=5);
-    B --> C(Spectral Filtering);
-    C --> D(Edge Pruning & Concept Drift Detection);
-    D --> E{Feature Split};
-    E --> F[Credit GAT];
-    E --> G[Credit Temporal LSTM];
-    F --> H(Dual-View Contrastive Learning);
-    G --> H;
-    H --> I[Fraud Probability Vector];
-    I --> J[Dynamic Decision Engine];
+    A[Tabular Transaction Data] --> B(k-NN Graph Construction k=5)
+    B --> C(Spectral Filtering)
+    C --> D(Edge Pruning & Concept Drift Detection)
+    D --> E{Feature Split}
+    E --> F[Credit GAT]
+    E --> G[Credit Temporal LSTM]
+    F --> H(Dual-View Contrastive Learning)
+    G --> H
+    H --> I[Fraud Probability Vector]
+    I --> J[Fusion Input]
 ```
 
 ---
 
 ## 🔬 Mathematical Models & Algorithms
 
-The system leverages advanced mathematical concepts to power its dual-view network.
+The system leverages advanced mathematical concepts to power its dual-view network and fusion pipeline.
 
 ### 1. Graph Construction (Credit Module)
 In tabular datasets, implicit temporal-structural relationships are uncovered by dynamically building edges using $k$-Nearest Neighbors:
@@ -151,55 +96,40 @@ $$\text{Edges } E = \{(i, j) \mid j \in N(i)\}$$
 
 ### 2. Spectral Graph Filtering
 Smoothing node features using an approximation of graph convolution to suppress high-frequency noise.
-Given Adjacency matrix $A$ with self-loops $\hat{A} = A + I$ and Degree matrix $\hat{D}$:
 $$L_{norm} = \hat{D}^{-1/2} \hat{A} \hat{D}^{-1/2}$$
-Filtered Features $X_{filtered}$:
 $$X_{filtered} = (1 - \alpha) X + \alpha L_{norm} X$$
-*(Where $\alpha$ represents the smoothing factor controlling retention of the base feature $X$)*
 
-### 3. Edge Pruning & Adversarial Injection
-- **Edge Pruning:** Edges $(i,j)$ are detached if the similarity drops below a hard threshold.
-- **Adversarial Injection:** Random or adversarial fake edges are temporarily added during training to test and enforce graph robustness.
-
-### 4. Graph Attention Network (GAT View)
+### 3. Graph Attention Network (GAT View)
 Captures complex structural relationships via self-attention mechanisms over the neighbors.
-Attention coefficient $e_{ij}$ between node $i$ and $j$:
 $$e_{ij} = \text{LeakyReLU}\left(\vec{a}^T [W h_i || W h_j]\right)$$
-Normalized attention $\alpha_{ij}$:
 $$\alpha_{ij} = \frac{\exp(e_{ij})}{\sum_{k \in N(i)} \exp(e_{ik})}$$
-Updated node embedding:
 $$h_i^{\prime} = \sigma\left(\sum_{j \in N(i)} \alpha_{ij} W h_j\right)$$
 
-### 5. Temporal Modeling (Temporal View)
-A Long Short-Term Memory unit processes sequential data iteratively. To fuse it, we project the final hidden state into a residual layout:
-$$h_t = \text{LSTM}(x_t, h_{t-1})$$
-$$Z_{temp} = X_{in} + \text{Linear}(h_{T})$$
-
-### 6. Dual-View Contrastive Learning
-To ensure that behavioral (temporal) features structurally mirror relationship (graph) features, the Mean Squared Error (Contrastive Proxy) aligns their latent projections:
+### 4. Dual-View Contrastive Learning
+To ensure that behavioral (temporal) features structurally mirror relationship (graph) features, the Mean Squared Error aligns their latent projections:
 $$L_{contrast} = \frac{1}{N} \sum_{i=1}^{N} \left\| Z_{graph}^{(i)} - Z_{temp}^{(i)} \right\|_2^2$$
 
-### 7. Global Optimization Constraints
-Due to massive imbalances in fraud vs. non-fraud, a class-weighted cross-entropy loss isolates misclassifications, augmented by the contrastive term:
-$$L_{cls} = - \sum_{c \in \{0,1\}} w_c \cdot y_c \log(\hat{y}_c)$$
-$$L_{total} = L_{cls} + \lambda L_{contrast}$$
-*(Where $w_1 \gg w_0$ and $\lambda = 0.01$ or $0.05$)*
+### 5. Confidence-Weighted Fusion
+Models output fraud probabilities $P_m$ and uncertainty limits $1 - P_m$. The fusion layer scales and maps inputs using uncertainty as the weight variable.
+$$C_c = 1 - U_c, \quad C_k = 1 - U_k$$
+$$W_c = \frac{C_c}{C_c + C_k + \epsilon}, \quad W_k = \frac{C_k}{C_c + C_k + \epsilon}$$
+$$P_{final} = \sqrt{W_c P_c + W_k P_k}$$
+
+### 6. Robust Dynamic Thresholding
+Decision limits are bound organically from sample percentiles, establishing flexible operational minimums to adapt against drift:
+$$\text{Block}_{threshold}  = \max(P_{90}, 0.4)$$
+$$\text{Analyst}_{threshold} = \max(P_{70}, 0.2)$$
 
 ---
 
 ## 🧮 Decision Engine
 
-The probability threshold is never static. To preserve robust operational safety, optimal thresholds are computationally derived via the PR Curve.
-
-$$ \text{threshold}_{opt} = \arg\max(F1\_Score) $$
-*(For crypto, the final execution boundary is optionally scaled by a factor like $0.75$ to increase conservatism).*
-
-Confidence uncertainty is measured as: $$ U = 1 - \max(P(0), P(1)) $$
+The probability threshold is never static. Using the fusion percentiles computed during warm-up inference stages, decisions act dynamically across 4 severity tiers targeting both the final probability mapping and raw uncertainty profiles.
 
 **Action Matrix:**
-- **UNCERTAINTY ($U > 0.6 \sim 0.75$)** ➡️ `SEND TO ANALYST`
-- **PROBABILITY > (threshold + high_delta)** ➡️ `BLOCK`
-- **PROBABILITY > (threshold)** ➡️ `OTP` (Challenge)
+- **UNCERTAINTY ($U > 0.7$)** ➡️ `SEND TO ANALYST`
+- **PROBABILITY $\ge$ Block Threshold** ➡️ `BLOCK`
+- **PROBABILITY $\ge$ Analyst Threshold** ➡️ `OTP` (Challenge)
 - **OTHERWISE** ➡️ `ALLOW`
 
 ---
@@ -214,8 +144,8 @@ Confidence uncertainty is measured as: $$ U = 1 - \max(P(0), P(1)) $$
 
 ### System Optimizations
 - **Data Locality:** Removed redundant tensor memory copies on the GPU.
-- **Precomputed Boundaries:** Offloaded non-trainable KNN edges outside of active training loops.
-- **Regularization Pipeline:** Utilizes strong multi-layer dropouts juxtaposed against class-weight balancing logic.
+- **Precomputed Boundaries:** Offloaded non-trainable KNN edges outside of active inference loops, caching large static components.
+- **Regularization Pipeline:** Utilizes strong multi-layer dropouts juxtaposed against class-weight balancing logic and model temperature re-scaling.
 
 ---
 
@@ -223,15 +153,21 @@ Confidence uncertainty is measured as: $$ U = 1 - \max(P(0), P(1)) $$
 
 Ensure you have your environment populated via `requirements.txt`.
 
-**Train Crypto Fraud Module:**
+**1. Train Crypto Fraud Module:**
 ```bash
 python -m training.train
 ```
 
-**Train Credit Card Fraud Module:**
+**2. Train Credit Card Fraud Module:**
 ```bash
 python -m training.train_credit
 ```
+
+**3. Launch Interactive Dashboard:**
+```bash
+streamlit run streamlit_app.py
+```
+*The Streamlit application will start the Unified Fusion component, initialize dynamic memory layers, and open a localized browser interface to visualize and filter predictive outcomes.*
 
 ---
 
